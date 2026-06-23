@@ -1499,8 +1499,6 @@ begin
     HandleChangeProviderMessage(AJson.GetValue<string>('provider', ''))
   else if AAction = 'change_model' then
     HandleChangeModelMessage(AJson.GetValue<string>('model', ''))
-  else if AAction = 'web_login_connect' then
-    // web_login_connect deprecated
   else if AAction = 'error' then
     HandleErrorMessage(AJson.GetValue<string>('text', ''))
   else if AAction = 'create_project' then

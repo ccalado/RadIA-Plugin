@@ -144,7 +144,7 @@ const chatContainer   = document.getElementById('chat-container');
 const btnClearChat    = document.getElementById('btn-clear-chat');
 const btnHistory      = document.getElementById('btn-history');
 const btnSettings     = document.getElementById('btn-settings');
-const btnWebLogin     = document.getElementById('btn-web-login');
+
 const promptTextarea  = document.getElementById('prompt-textarea');
 const btnSendPrompt   = document.getElementById('btn-send-prompt');
 const selectProvider  = document.getElementById('select-provider');
@@ -632,15 +632,7 @@ btnSettings.addEventListener('click', () => {
   }
   postMessageToDelphi({ action: 'open_settings' });
 });
-if (btnWebLogin) {
-  btnWebLogin.addEventListener('click', () => {
-    if (!canChangeSession()) {
-      showSessionLockedStatus();
-      return;
-    }
-    postMessageToDelphi({ action: 'web_login_connect' });
-  });
-}
+
 
 btnNewChatSidebar.addEventListener('click', () => {
   if (!canChangeSession()) {
@@ -1311,13 +1303,7 @@ function initializeConfig(data) {
     });
   }
 
-  if (btnWebLogin) {
-    if (data.isWebLogin) {
-      btnWebLogin.classList.remove('hidden');
-    } else {
-      btnWebLogin.classList.add('hidden');
-    }
-  }
+
 }
 
 function updateModelsList(models, activeModel) {

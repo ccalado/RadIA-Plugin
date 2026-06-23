@@ -967,7 +967,6 @@ var
   LErrorMessage: string;
   LPrompt: string;
   LConfig: IRadIAConfig;
-  LActiveProvider: string;
 begin
   if FCreateExampleInProgress then
   begin
@@ -995,12 +994,6 @@ begin
   begin
     LConfig := TRadIAConfig.GetInstance;
     LConfig.Load;
-  end;
-  LActiveProvider := LConfig.GetActiveProvider;
-  if SameText(LConfig.GetProviderAuthType(LActiveProvider), 'web_login') then
-  begin
-    TLogger.Log('OnCreateExampleExecute: Active provider uses Web Login. Opening the chat bridge.', 'EditorHook');
-    ShowRadIAChat;
   end;
 
   LPrompt := BuildCreateExamplePrompt(LSourceCode, LContext);

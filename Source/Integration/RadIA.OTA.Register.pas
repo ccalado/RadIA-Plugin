@@ -344,19 +344,12 @@ var
   LForm: TRadIAFormAIDiff;
   LActiveFile: string;
   LConfig: IRadIAConfig;
-  LActiveProvider: string;
   LAdapter: IRadIAIDEAdapter;
 begin
   if not TRadIAContainer.TryResolve<IRadIAConfig>(LConfig) then
   begin
     LConfig := TRadIAConfig.GetInstance;
     LConfig.Load;
-  end;
-  LActiveProvider := LConfig.GetActiveProvider;
-  if SameText(LConfig.GetProviderAuthType(LActiveProvider), 'web_login') then
-  begin
-    LogDebug('OnRequestDiff: Active provider uses Web Login. Opening the chat bridge.');
-    ShowRadIAChat;
   end;
 
   LForm := TRadIAFormAIDiff.Create(nil);
