@@ -63,6 +63,21 @@ Para evitar quebras de build, observe atentamente as seguintes limitações do c
       ProcessChar(LStr[I]);
     ```
 
+### 2.6 Limite de Parâmetros em Rotinas e Métodos
+*   **A Regra:** Nenhuma função ou procedimento (rotina/método) deve possuir mais de **7 parâmetros** em sua assinatura, evitando a violação de acoplamento do SonarQube (`community-delphi:TooManyParameters`).
+*   **Solução:** Se um método precisar receber 8 ou mais parâmetros, agrupe-os logicamente em um `record` com um construtor de inicialização `Create` (ou use um objeto de parâmetros).
+*   **Exemplo:**
+    ```pascal
+    TRadIAOAuthParams = record
+      AuthUrl: string;
+      TokenUrl: string;
+      ClientId: string;
+      ClientSecret: string;
+      Port: Word;
+      constructor Create(const AAuthUrl, ATokenUrl, AClientId, AClientSecret: string; const APort: Word);
+    end;
+    ```
+
 ---
 
 ## 3. Convenções de Nomenclatura (Style Guide)
