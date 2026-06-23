@@ -23,6 +23,9 @@ type
     FApiKeys: TDictionary<string, string>;
     FActiveModels: TDictionary<string, string>;
     FBaseUrls: TDictionary<string, string>;
+    FOAuthAccessTokens: TDictionary<string, string>;
+    FOAuthRefreshTokens: TDictionary<string, string>;
+    FOAuthTokenExpirations: TDictionary<string, TDateTime>;
     FSmartConfigEnabled: Boolean;
     FLogEnabled: Boolean;
     FLogPath: string;
@@ -113,6 +116,13 @@ type
     function GetProviderAuthType(const AProviderName: string): string;
     procedure SetProviderAuthType(const AProviderName: string; const AValue: string);
     function IsWebLoginProvider(const AProviderName: string): Boolean;
+    function GetOAuthAccessToken(const AProviderName: string): string;
+    procedure SetOAuthAccessToken(const AProviderName: string; const AValue: string);
+    procedure ClearOAuthTokens(const AProviderName: string);
+    function GetOAuthRefreshToken(const AProviderName: string): string;
+    procedure SetOAuthRefreshToken(const AProviderName: string; const AValue: string);
+    function GetOAuthTokenExpiry(const AProviderName: string): TDateTime;
+    procedure SetOAuthTokenExpiry(const AProviderName: string; const AValue: TDateTime);
   end;
 
   [TestFixture]
@@ -269,6 +279,9 @@ begin
   FApiKeys := TDictionary<string, string>.Create;
   FActiveModels := TDictionary<string, string>.Create;
   FBaseUrls := TDictionary<string, string>.Create;
+  FOAuthAccessTokens := TDictionary<string, string>.Create;
+  FOAuthRefreshTokens := TDictionary<string, string>.Create;
+  FOAuthTokenExpirations := TDictionary<string, TDateTime>.Create;
 
   FQuotaEnabled := False;
   FQuotaLimit := 1000000;
@@ -292,6 +305,9 @@ begin
   FApiKeys.Free;
   FActiveModels.Free;
   FBaseUrls.Free;
+  FOAuthAccessTokens.Free;
+  FOAuthRefreshTokens.Free;
+  FOAuthTokenExpirations.Free;
   inherited Destroy;
 end;
 
@@ -655,9 +671,47 @@ end;
 
 function TMockConfig.IsWebLoginProvider(const AProviderName: string): Boolean;
 begin
-  if SameText(AProviderName, 'WebViewBridge') then
-    Exit(True);
-  Result := SameText(GetProviderAuthType(AProviderName), 'web_login');
+  Result := False;
+end;
+
+function TMockConfig.GetOAuthAccessToken(const AProviderName: string): string;
+begin
+  if not FOAuthAccessTokens.TryGetValue(AProviderName.ToLower, Result) then
+    Result := '';
+end;
+
+procedure TMockConfig.SetOAuthAccessToken(const AProviderName: string; const AValue: string);
+begin
+  FOAuthAccessTokens.AddOrSetValue(AProviderName.ToLower, AValue);
+end;
+
+procedure TMockConfig.ClearOAuthTokens(const AProviderName: string);
+begin
+  FOAuthAccessTokens.AddOrSetValue(AProviderName.ToLower, '');
+  FOAuthRefreshTokens.AddOrSetValue(AProviderName.ToLower, '');
+  FOAuthTokenExpirations.AddOrSetValue(AProviderName.ToLower, 0);
+end;
+
+function TMockConfig.GetOAuthRefreshToken(const AProviderName: string): string;
+begin
+  if not FOAuthRefreshTokens.TryGetValue(AProviderName.ToLower, Result) then
+    Result := '';
+end;
+
+procedure TMockConfig.SetOAuthRefreshToken(const AProviderName: string; const AValue: string);
+begin
+  FOAuthRefreshTokens.AddOrSetValue(AProviderName.ToLower, AValue);
+end;
+
+function TMockConfig.GetOAuthTokenExpiry(const AProviderName: string): TDateTime;
+begin
+  if not FOAuthTokenExpirations.TryGetValue(AProviderName.ToLower, Result) then
+    Result := 0;
+end;
+
+procedure TMockConfig.SetOAuthTokenExpiry(const AProviderName: string; const AValue: TDateTime);
+begin
+  FOAuthTokenExpirations.AddOrSetValue(AProviderName.ToLower, AValue);
 end;
 
 { TTestRadIAService helpers }

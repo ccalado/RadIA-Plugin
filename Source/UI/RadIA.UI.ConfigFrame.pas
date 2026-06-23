@@ -116,6 +116,7 @@ type
 
     procedure UpdateTemplatesList(const ATemplateNames: TArray<string>; const ASelectedIndex: Integer);
     procedure GetTemplateEditorFields(out AName, ADesc, ABody, ASlash: string; out AIsProjGen: Boolean);
+    procedure UpdateOAuthState(const AProviderId: string; const AIsLoggedIn: Boolean);
     procedure SetTemplateFields(const AName, ADesc, ABody, ASlash: string; const AIsProjGen: Boolean; const AIsSystem,
         AIsCustomized: Boolean);
     procedure ClearTemplateFields;
@@ -268,7 +269,7 @@ implementation
 
 uses
   System.IOUtils, System.JSON, RadIA.UI.Resources, System.UITypes, Vcl.FileCtrl,
-  Winapi.ShellAPI, RadIA.UI.GithubAuthForm, RadIA.UI.WebLoginForm, Winapi.Windows, System.SysUtils, ToolsAPI;
+  Winapi.ShellAPI, RadIA.UI.GithubAuthForm, Winapi.Windows, System.SysUtils, ToolsAPI;
 
 {$R *.dfm}
 
@@ -408,6 +409,12 @@ var
 begin
   inherited Create(AOwner);
   FPresenter := TRadIAConfigPresenter.Create(Self);
+
+  // Update RadioGroup text in runtime for OAuth
+  if grpGeminiAuthType.Items.Count > 1 then
+    grpGeminiAuthType.Items[1] := 'Sign in with Google (OAuth)';
+  if grpOpenAIAuthType.Items.Count > 1 then
+    grpOpenAIAuthType.Items[1] := 'Sign in with ChatGPT (OAuth)';
 
   CreateTemplateOriginLabel;
 
@@ -980,26 +987,36 @@ end;
 
 procedure TRadIAFrameAIConfig.btnGeminiWebLoginClick(Sender: TObject);
 begin
-  TRadIAFormWebLogin.ShowLogin(Self, 'https://gemini.google.com',
-    procedure
-    begin
-      grpGeminiAuthType.ItemIndex := 1;
-      grpGeminiAuthTypeClick(grpGeminiAuthType);
-      FPresenter.SaveConfig;
-      ShowMessage('Gemini web login completed successfully.');
-    end);
+  if SameText(btnGeminiWebLogin.Caption, 'Sign Out') then
+    FPresenter.PerformOAuthLogoff('Gemini')
+  else
+    FPresenter.StartOAuthLogin('Gemini');
 end;
 
 procedure TRadIAFrameAIConfig.btnOpenAIWebLoginClick(Sender: TObject);
 begin
-  TRadIAFormWebLogin.ShowLogin(Self, 'https://chatgpt.com',
-    procedure
-    begin
-      grpOpenAIAuthType.ItemIndex := 1;
-      grpOpenAIAuthTypeClick(grpOpenAIAuthType);
-      FPresenter.SaveConfig;
-      ShowMessage('OpenAI web login completed successfully.');
-    end);
+  if SameText(btnOpenAIWebLogin.Caption, 'Sign Out') then
+    FPresenter.PerformOAuthLogoff('OpenAI')
+  else
+    FPresenter.StartOAuthLogin('OpenAI');
+end;
+
+procedure TRadIAFrameAIConfig.UpdateOAuthState(const AProviderId: string; const AIsLoggedIn: Boolean);
+begin
+  if SameText(AProviderId, 'Gemini') then
+  begin
+    if AIsLoggedIn then
+      btnGeminiWebLogin.Caption := 'Sign Out'
+    else
+      btnGeminiWebLogin.Caption := 'Sign In with Google';
+  end
+  else if SameText(AProviderId, 'OpenAI') then
+  begin
+    if AIsLoggedIn then
+      btnOpenAIWebLogin.Caption := 'Sign Out'
+    else
+      btnOpenAIWebLogin.Caption := 'Sign In with ChatGPT';
+  end;
 end;
 
 procedure TRadIAFrameAIConfig.BtnSaveClick(Sender: TObject);

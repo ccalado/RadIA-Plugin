@@ -7,7 +7,7 @@ uses
   RadIA.Core.TokenUsage, RadIA.Provider.DeepSeek, RadIA.Provider.Groq, RadIA.Provider.OpenRouter,
   RadIA.Provider.LMStudio, RadIA.Provider.AzureOpenAI, RadIA.Provider.Qwen, RadIA.Provider.Mistral,
   RadIA.Provider.Bedrock,
-  RadIA.Provider.GithubCopilot, RadIA.Provider.WebViewBridge,
+  RadIA.Provider.GithubCopilot,
   RadIA.Provider.Gemini, RadIA.Provider.Claude, RadIA.Provider.Ollama,
   System.SysUtils, System.Net.URLClient;
 
@@ -48,7 +48,6 @@ type
     FMistralProv: TRadIAMistralProvider;
     FBedrockProv: TRadIABedrockProvider;
     FGithubCopilotProv: TRadIAGithubCopilotProvider;
-    FWebViewBridgeProv: TRadIAWebViewBridgeProvider;
     FGeminiProv: TRadIAGeminiProvider;
     FClaudeProv: TRadIAClaudeProvider;
     FOllamaProv: TRadIAOllamaProvider;
@@ -61,7 +60,6 @@ type
     FMistralProvRef: IRadIAProvider;
     FBedrockProvRef: IRadIAProvider;
     FGithubCopilotProvRef: IRadIAProvider;
-    FWebViewBridgeProvRef: IRadIAProvider;
     FGeminiProvRef: IRadIAProvider;
     FClaudeProvRef: IRadIAProvider;
     FOllamaProvRef: IRadIAProvider;
@@ -169,8 +167,6 @@ type
     [Test]
     procedure TestGithubCopilot_SendPromptStreamAsync;
     [Test]
-    procedure TestWebViewBridge_Workflow;
-    [Test]
     procedure TestGemini_SendPromptAsync;
     [Test]
     procedure TestGemini_SendPromptStreamAsync;
@@ -269,8 +265,6 @@ begin
   FBedrockProvRef := FBedrockProv;
   FGithubCopilotProv := TRadIAGithubCopilotProvider.Create(FConfig);
   FGithubCopilotProvRef := FGithubCopilotProv;
-  FWebViewBridgeProv := TRadIAWebViewBridgeProvider.Create(FConfig);
-  FWebViewBridgeProvRef := FWebViewBridgeProv;
   FGeminiProv := TRadIAGeminiProvider.Create(FConfig);
   FGeminiProvRef := FGeminiProv;
   FClaudeProv := TRadIAClaudeProvider.Create(FConfig);
@@ -300,7 +294,6 @@ begin
   FMistralProvRef := nil;
   FBedrockProvRef := nil;
   FGithubCopilotProvRef := nil;
-  FWebViewBridgeProvRef := nil;
   FGeminiProvRef := nil;
   FClaudeProvRef := nil;
   FOllamaProvRef := nil;
@@ -314,7 +307,6 @@ begin
   FMistralProv := nil;
   FBedrockProv := nil;
   FGithubCopilotProv := nil;
-  FWebViewBridgeProv := nil;
   FGeminiProv := nil;
   FClaudeProv := nil;
   FOllamaProv := nil;
@@ -949,51 +941,7 @@ begin
   System.Classes.CheckSynchronize(50);
 end;
 
-procedure TTestRadIAProvidersEx.TestWebViewBridge_Workflow;
-var
-  LProvider: TRadIAWebViewBridgeProvider;
-  LReceivedText: string;
-  LIsDone: Boolean;
-  LCallbackCount: Integer;
-begin
-  FMockSendPromptCalled := False;
-  FMockCancelCalled := False;
-  FMockPromptReceived := '';
-  LReceivedText := '';
-  LIsDone := False;
-  LCallbackCount := 0;
-
-  LProvider := TRadIAWebViewBridgeProvider.Create(FConfig);
-  try
-    TRadIAWebViewBridgeProvider.OnSendPrompt := Self.MockSendPromptEvent;
-    TRadIAWebViewBridgeProvider.OnCancel := Self.MockCancelEvent;
-
-    // Disparar o envio
-    LProvider.SendPromptStreamAsync('Bridge Prompt', [],
-      procedure(const AChunk: string; const AIsDone: Boolean; const AError: string)
-      begin
-        Inc(LCallbackCount);
-        LReceivedText := LReceivedText + AChunk;
-        if AIsDone then
-          LIsDone := True;
-      end, 0.7, 100);
-
-    // Receber chunks via Bridge
-    TRadIAWebViewBridgeProvider.ReceiveChunk('Part 1 ', False, '');
-    TRadIAWebViewBridgeProvider.ReceiveChunk('Part 2', True, '');
-
-    Assert.AreEqual('Part 1 Part 2', LReceivedText);
-    Assert.IsTrue(LIsDone);
-    Assert.AreEqual(2, LCallbackCount);
-
-    // Testar Cancelamento
-    LProvider.CancelCurrentRequest;
-  finally
-    TRadIAWebViewBridgeProvider.OnSendPrompt := nil;
-    TRadIAWebViewBridgeProvider.OnCancel := nil;
-    LProvider.Free;
-  end;
-end;
+// TestWebViewBridge_Workflow removed as WebViewBridge is deprecated.
 
 { TMockHttpClient }
 

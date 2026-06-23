@@ -137,6 +137,8 @@
         <DCCReference Include="Source\Core\RadIA.Core.HttpClient.pas"/>
         <DCCReference Include="Source\Core\RadIA.Core.ErrorDecoder.pas"/>
         <DCCReference Include="Source\Core\RadIA.Core.Localizer.pas"/>
+        <DCCReference Include="Source\Core\RadIA.Core.OAuth.pas"/>
+        <DCCReference Include="Source\Core\RadIA.Core.IndyLoopback.pas"/>
         <DCCReference Include="Source\Providers\RadIA.Provider.Streaming.pas"/>
         <DCCReference Include="Source\Providers\RadIA.Provider.Base.pas"/>
         <DCCReference Include="Source\Providers\RadIA.Provider.Gemini.pas"/>
@@ -148,7 +150,6 @@
         <DCCReference Include="Source\Providers\RadIA.Provider.OpenRouter.pas"/>
         <DCCReference Include="Source\Providers\RadIA.Provider.Generic.pas"/>
         <DCCReference Include="Source\Providers\RadIA.Provider.LMStudio.pas"/>
-        <DCCReference Include="Source\Providers\RadIA.Provider.WebViewBridge.pas"/>
         <DCCReference Include="Source\Providers\RadIA.Provider.GithubCopilot.pas"/>
         <DCCReference Include="Source\Providers\RadIA.Provider.AzureOpenAI.pas"/>
         <DCCReference Include="Source\Providers\RadIA.Provider.Qwen.pas"/>
@@ -180,10 +181,6 @@
         </DCCReference>
         <DCCReference Include="Source\UI\RadIA.UI.DiffForm.pas">
             <Form>FormAIDiff</Form>
-            <FormType>dfm</FormType>
-        </DCCReference>
-        <DCCReference Include="Source\UI\RadIA.UI.WebLoginForm.pas">
-            <Form>FormWebLogin</Form>
         </DCCReference>
         <DCCReference Include="Source\UI\RadIA.UI.GithubAuthForm.pas">
             <Form>FormGithubAuth</Form>

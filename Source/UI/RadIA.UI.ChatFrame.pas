@@ -131,7 +131,7 @@ implementation
 
 uses
   System.IOUtils, System.JSON, ToolsAPI, RadIA.OTA.Helper, RadIA.UI.ConfigForm,
-  RadIA.Core.Mediator, RadIA.Core.Logger, RadIA.UI.WebLoginForm, RadIA.Core.Container,
+  RadIA.Core.Mediator, RadIA.Core.Logger, RadIA.Core.Container,
   Winapi.ActiveX, RadIA.Core.ProviderRegistry, RadIA.Core.Types, Winapi.Windows, RadIA.Core.Interfaces;
 
 {$R *.dfm}
@@ -833,7 +833,7 @@ end;
 
 procedure TRadIAFrameAIChat.ShowLoginWindow(const AUrl: string; AOnLoginSuccess: TProc);
 begin
-  TRadIAFormWebLogin.ShowLogin(Self, AUrl, AOnLoginSuccess);
+  // Web Login is deprecated
 end;
 
 procedure TRadIAFrameAIChat.UpdateProviders(const AProviders: TArray<string>; const AActiveProvider: string);
@@ -1099,43 +1099,17 @@ begin
     InjectWebViewScrollbarStyle(FEdgeBrowserWeb, 'background Web view');
     InjectBridgeScript(FEdgeBrowserWeb.DefaultInterface);
   end;
-
-  if Assigned(FPresenter) then
-    FPresenter.OnBackgroundBrowserInitialized;
 end;
 
 procedure TRadIAFrameAIChat.EdgeBrowserWebSourceChanged(Sender: TCustomEdgeBrowser; IsNewDocument: Boolean);
 begin
-  if Assigned(FPresenter) then
-    FPresenter.OnBackgroundBrowserNavigation(Sender.LocationURL);
+  // Web Login is deprecated
 end;
 
 procedure TRadIAFrameAIChat.EdgeBrowserWebWebMessageReceived(Sender: TCustomEdgeBrowser;
     Args: TWebMessageReceivedEventArgs);
-var
-  LStr: PWideChar;
-  LJsonStr: PWideChar;
 begin
-  if Assigned(Args.ArgsInterface) then
-  begin
-    if Succeeded(Args.ArgsInterface.TryGetWebMessageAsString(LStr)) then
-    begin
-      try
-        FPresenter.OnBackgroundBrowserMessage(string(LStr));
-      finally
-        CoTaskMemFree(LStr);
-      end;
-    end
-    else
-    begin
-      Args.ArgsInterface.Get_webMessageAsJson(LJsonStr);
-      try
-        FPresenter.OnBackgroundBrowserMessage(string(LJsonStr));
-      finally
-        CoTaskMemFree(LJsonStr);
-      end;
-    end;
-  end;
+  // Web Login is deprecated
 end;
 
 end.

@@ -55,6 +55,7 @@ type
     FTemplateOriginLabelText: string;
     FTemplateOriginLabelColor: TColor;
     FFocusTemplateNameCalled: Boolean;
+    FOAuthLoggedInMap: TDictionary<string, Boolean>;
   public
     constructor Create;
     destructor Destroy; override;
@@ -117,6 +118,7 @@ type
 
     procedure UpdateTemplatesList(const ATemplateNames: TArray<string>; const ASelectedIndex: Integer);
     procedure GetTemplateEditorFields(out AName, ADesc, ABody, ASlash: string; out AIsProjGen: Boolean);
+    procedure UpdateOAuthState(const AProviderId: string; const AIsLoggedIn: Boolean);
     procedure SetTemplateFields(const AName, ADesc, ABody, ASlash: string; const AIsProjGen: Boolean; const AIsSystem,
         AIsCustomized: Boolean);
     procedure ClearTemplateFields;
@@ -148,6 +150,7 @@ type
     property QuotaEnabled: Boolean read FQuotaEnabled write FQuotaEnabled;
     property QuotaLimit: string read FQuotaLimit write FQuotaLimit;
     property QuotaUsedText: string read FQuotaUsedText write FQuotaUsedText;
+    property OAuthLoggedInMap: TDictionary<string, Boolean> read FOAuthLoggedInMap write FOAuthLoggedInMap;
     property LastMessageDialogText: string read FLastMessageDialogText write FLastMessageDialogText;
     property SaveDialogResult: Boolean read FSaveDialogResult write FSaveDialogResult;
     property SaveDialogSelectedFileName: string read FSaveDialogSelectedFileName write FSaveDialogSelectedFileName;
@@ -200,6 +203,8 @@ type
     procedure TestResetQuotaUsage;
     [Test]
     procedure TestSaveConfigDummy;
+    [Test]
+    procedure TestOAuthLogoff;
   end;
 
 implementation
@@ -218,6 +223,7 @@ begin
   TempMap := TDictionary<string, string>.Create;
   MaxTokensMap := TDictionary<string, string>.Create;
   TimeoutMap := TDictionary<string, string>.Create;
+  FOAuthLoggedInMap := TDictionary<string, Boolean>.Create;
 
   SaveDialogResult := True;
   OpenDialogResult := True;
@@ -236,6 +242,7 @@ begin
   TempMap.Free;
   MaxTokensMap.Free;
   TimeoutMap.Free;
+  FOAuthLoggedInMap.Free;
   inherited Destroy;
 end;
 
@@ -267,6 +274,11 @@ end;
 procedure TMockConfigView.SetAuthTypeIndex(const AProviderId: string; const AIndex: Integer);
 begin
   AuthTypeMap.AddOrSetValue(AProviderId, AIndex);
+end;
+
+procedure TMockConfigView.UpdateOAuthState(const AProviderId: string; const AIsLoggedIn: Boolean);
+begin
+  FOAuthLoggedInMap.AddOrSetValue(AProviderId.ToLower, AIsLoggedIn);
 end;
 
 function TMockConfigView.GetTemperatureInput(const AProviderId: string): string;
@@ -540,6 +552,25 @@ begin
   except
   end;
   Assert.IsTrue(True);
+end;
+
+procedure TTestConfigPresenter.TestOAuthLogoff;
+begin
+  FConfig.SetOAuthAccessToken('Gemini', 'dummy-token');
+  FConfig.SetOAuthRefreshToken('Gemini', 'dummy-refresh');
+  FConfig.SetProviderAuthType('Gemini', 'oauth');
+  FConfig.Save;
+
+  FPresenter.LoadConfig;
+  Assert.IsTrue(FMockView.OAuthLoggedInMap.ContainsKey('gemini'));
+  Assert.IsTrue(FMockView.OAuthLoggedInMap.Items['gemini']);
+
+  FPresenter.PerformOAuthLogoff('Gemini');
+
+  Assert.IsEmpty(FConfig.GetOAuthAccessToken('Gemini'));
+  Assert.IsEmpty(FConfig.GetOAuthRefreshToken('Gemini'));
+  Assert.AreEqual('api_key', FConfig.GetProviderAuthType('Gemini'));
+  Assert.IsFalse(FMockView.OAuthLoggedInMap.Items['gemini']);
 end;
 
 initialization

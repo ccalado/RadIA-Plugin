@@ -38,6 +38,10 @@ type
     procedure TestAdvancedSettingsPersistence;
     [Test]
     procedure TestProviderSpecificSettingsAreSavedUnderProviderKeys;
+    [Test]
+    procedure TestOAuthTokenEncryptionAndDecryption;
+    [Test]
+    procedure TestClearOAuthTokens;
   end;
 
 implementation
@@ -285,6 +289,74 @@ begin
     LConfig := nil;
     TRadIAConfig.SetStorage(nil);
     TRadIAConfig.SetBaseRegistryPath('');
+  end;
+end;
+
+procedure TTestRadIAConfig.TestOAuthTokenEncryptionAndDecryption;
+const
+  TEST_ACCESS = 'test-oauth-access-token-12345';
+  TEST_REFRESH = 'test-oauth-refresh-token-12345';
+  TEST_EXPIRY = 46258.5;
+var
+  LStoredAccess: string;
+  LStoredRefresh: string;
+begin
+  FConfig.SetOAuthAccessToken('Gemini', TEST_ACCESS);
+  FConfig.SetOAuthRefreshToken('Gemini', TEST_REFRESH);
+  FConfig.SetOAuthTokenExpiry('Gemini', TEST_EXPIRY);
+  FConfig.Save;
+
+  FConfig.Load;
+  Assert.AreEqual(TEST_ACCESS, FConfig.GetOAuthAccessToken('Gemini'));
+  Assert.AreEqual(TEST_REFRESH, FConfig.GetOAuthRefreshToken('Gemini'));
+  Assert.AreEqual(TEST_EXPIRY, FConfig.GetOAuthTokenExpiry('Gemini'), 0.0001);
+
+  Assert.IsTrue(FStorage.OpenKey('Software\TestRadIAConfig\Gemini', False));
+  try
+    Assert.IsTrue(FStorage.ValueExists('OAuthAccessToken'));
+    Assert.IsTrue(FStorage.ValueExists('OAuthRefreshToken'));
+    Assert.IsTrue(FStorage.ValueExists('OAuthTokenExpiry'));
+
+    LStoredAccess := FStorage.ReadString('OAuthAccessToken', '');
+    LStoredRefresh := FStorage.ReadString('OAuthRefreshToken', '');
+
+    Assert.AreNotEqual(TEST_ACCESS, LStoredAccess, 'OAuth access token should be encrypted.');
+    Assert.AreNotEqual(TEST_REFRESH, LStoredRefresh, 'OAuth refresh token should be encrypted.');
+    Assert.AreEqual(TEST_EXPIRY, FStorage.ReadFloat('OAuthTokenExpiry', 0), 0.0001);
+  finally
+    FStorage.CloseKey;
+  end;
+end;
+
+procedure TTestRadIAConfig.TestClearOAuthTokens;
+const
+  TEST_ACCESS = 'test-oauth-access-token-12345';
+  TEST_REFRESH = 'test-oauth-refresh-token-12345';
+  TEST_EXPIRY = 46258.5;
+begin
+  FConfig.SetOAuthAccessToken('Gemini', TEST_ACCESS);
+  FConfig.SetOAuthRefreshToken('Gemini', TEST_REFRESH);
+  FConfig.SetOAuthTokenExpiry('Gemini', TEST_EXPIRY);
+  FConfig.Save;
+
+  FConfig.ClearOAuthTokens('Gemini');
+
+  Assert.IsEmpty(FConfig.GetOAuthAccessToken('Gemini'));
+  Assert.IsEmpty(FConfig.GetOAuthRefreshToken('Gemini'));
+  Assert.AreEqual(0.0, FConfig.GetOAuthTokenExpiry('Gemini'), 0.0001);
+
+  FConfig.Load;
+  Assert.IsEmpty(FConfig.GetOAuthAccessToken('Gemini'));
+  Assert.IsEmpty(FConfig.GetOAuthRefreshToken('Gemini'));
+  Assert.AreEqual(0.0, FConfig.GetOAuthTokenExpiry('Gemini'), 0.0001);
+
+  Assert.IsTrue(FStorage.OpenKey('Software\TestRadIAConfig\Gemini', False));
+  try
+    Assert.IsEmpty(FStorage.ReadString('OAuthAccessToken', ''));
+    Assert.IsEmpty(FStorage.ReadString('OAuthRefreshToken', ''));
+    Assert.AreEqual(0.0, FStorage.ReadFloat('OAuthTokenExpiry', 0), 0.0001);
+  finally
+    FStorage.CloseKey;
   end;
 end;
 

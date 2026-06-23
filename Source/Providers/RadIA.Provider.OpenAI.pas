@@ -11,6 +11,8 @@ type
     function GetBaseUrl: string; override;
     function GetModelsDiscoveryUrl: string; override;
     function FilterModelId(const AId: string): Boolean; override;
+    function GetOAuthTokenUrl: string; override;
+    function GetOAuthClientId: string; override;
   public
     constructor Create(const AConfig: IRadIAConfig); override;
 
@@ -59,6 +61,16 @@ begin
   { Accept only GPT and O-series reasoning models }
   Result := not AId.IsEmpty and
     (AId.StartsWith('gpt-') or AId.StartsWith('o1-') or AId.StartsWith('o3-'));
+end;
+
+function TRadIAOpenAIProvider.GetOAuthTokenUrl: string;
+begin
+  Result := 'https://auth.openai.com/oauth/token';
+end;
+
+function TRadIAOpenAIProvider.GetOAuthClientId: string;
+begin
+  Result := 'radia-delphi-plugin';
 end;
 
 

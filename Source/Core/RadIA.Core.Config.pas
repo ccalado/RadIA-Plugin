@@ -46,6 +46,9 @@ type
     FTimeoutsList: TStringList;
     FBaseUrlsList: TStringList;
     FAuthTypesList: TStringList;
+    FOAuthAccessTokensList: TStringList;
+    FOAuthRefreshTokensList: TStringList;
+    FOAuthTokenExpirationsList: TStringList;
 
     function TryMigrateLegacyPath(const APath: string; out AMigratedPath: string): Boolean;
     procedure LoadGlobalSettings(const APath: string);
@@ -146,6 +149,13 @@ type
     procedure Save;
     procedure Load;
     function IsWebLoginProvider(const AProviderName: string): Boolean;
+    function GetOAuthAccessToken(const AProviderName: string): string;
+    procedure SetOAuthAccessToken(const AProviderName: string; const AValue: string);
+    procedure ClearOAuthTokens(const AProviderName: string);
+    function GetOAuthRefreshToken(const AProviderName: string): string;
+    procedure SetOAuthRefreshToken(const AProviderName: string; const AValue: string);
+    function GetOAuthTokenExpiry(const AProviderName: string): TDateTime;
+    procedure SetOAuthTokenExpiry(const AProviderName: string; const AValue: TDateTime);
   end;
 
 implementation
@@ -177,6 +187,9 @@ begin
   FTimeoutsList := TStringList.Create;
   FBaseUrlsList := TStringList.Create;
   FAuthTypesList := TStringList.Create;
+  FOAuthAccessTokensList := TStringList.Create;
+  FOAuthRefreshTokensList := TStringList.Create;
+  FOAuthTokenExpirationsList := TStringList.Create;
 
   FActiveProvider := TConfigDefaults.ActiveProvider;
   FSystemPrompt := CDefaultSystemPrompt;
@@ -219,6 +232,9 @@ begin
   FTimeoutsList.Free;
   FBaseUrlsList.Free;
   FAuthTypesList.Free;
+  FOAuthAccessTokensList.Free;
+  FOAuthRefreshTokensList.Free;
+  FOAuthTokenExpirationsList.Free;
   inherited Destroy;
 end;
 
@@ -451,6 +467,38 @@ begin
 
     LoadBaseUrl(AProviderName);
 
+    if FStorage.ValueExists('OAuthAccessToken') then
+    begin
+      try
+        FOAuthAccessTokensList.Values[AProviderName.ToLower] := UnprotectString(
+          FStorage.ReadString('OAuthAccessToken', '')
+        );
+      except
+        on E: Exception do
+          LogDebug('Failed to unprotect OAuthAccessToken for ' + AProviderName + ': ' + E.Message);
+      end;
+    end;
+
+    if FStorage.ValueExists('OAuthRefreshToken') then
+    begin
+      try
+        FOAuthRefreshTokensList.Values[AProviderName.ToLower] := UnprotectString(
+          FStorage.ReadString('OAuthRefreshToken', '')
+        );
+      except
+        on E: Exception do
+          LogDebug('Failed to unprotect OAuthRefreshToken for ' + AProviderName + ': ' + E.Message);
+      end;
+    end;
+
+    if FStorage.ValueExists('OAuthTokenExpiry') then
+    begin
+      FOAuthTokenExpirationsList.Values[AProviderName.ToLower] := FloatToStr(
+        FStorage.ReadFloat('OAuthTokenExpiry', 0),
+        TFormatSettings.Invariant
+      );
+    end;
+
     if SameText(AProviderName, 'AzureOpenAI') then
       FAzureApiVersion := ReadRegString('ApiVersion', TConfigDefaults.AzureApiVersion);
     if SameText(AProviderName, 'Bedrock') then
@@ -590,6 +638,10 @@ begin
       FStorage.WriteInteger('MaxTokens', GetMaxTokens(LKey));
       FStorage.WriteInteger('Timeout', GetTimeout(LKey));
       FStorage.WriteString('AuthType', GetProviderAuthType(LKey));
+
+      FStorage.WriteString('OAuthAccessToken', ProtectString(GetOAuthAccessToken(LKey)));
+      FStorage.WriteString('OAuthRefreshToken', ProtectString(GetOAuthRefreshToken(LKey)));
+      FStorage.WriteFloat('OAuthTokenExpiry', GetOAuthTokenExpiry(LKey));
 
       FStorage.CloseKey;
       LogDebug('TRadIAConfig.Save: Saved ApiKey and Model (' + GetActiveModel(LKey) + ') for ' + LKey);
@@ -995,9 +1047,65 @@ end;
 
 function TRadIAConfig.IsWebLoginProvider(const AProviderName: string): Boolean;
 begin
-  if SameText(AProviderName, 'WebViewBridge') then
-    Exit(True);
-  Result := SameText(GetProviderAuthType(AProviderName), 'web_login');
+  Result := False;
+end;
+
+function TRadIAConfig.GetOAuthAccessToken(const AProviderName: string): string;
+begin
+  if AProviderName.IsEmpty then
+    Exit('');
+  Result := FOAuthAccessTokensList.Values[AProviderName.ToLower];
+end;
+
+procedure TRadIAConfig.SetOAuthAccessToken(const AProviderName: string; const AValue: string);
+begin
+  if AProviderName.IsEmpty then
+    Exit;
+  FOAuthAccessTokensList.Values[AProviderName.ToLower] := AValue;
+end;
+
+procedure TRadIAConfig.ClearOAuthTokens(const AProviderName: string);
+begin
+  if AProviderName.IsEmpty then
+    Exit;
+  FOAuthAccessTokensList.Values[AProviderName.ToLower] := '';
+  FOAuthRefreshTokensList.Values[AProviderName.ToLower] := '';
+  FOAuthTokenExpirationsList.Values[AProviderName.ToLower] := '';
+  Save;
+end;
+
+function TRadIAConfig.GetOAuthRefreshToken(const AProviderName: string): string;
+begin
+  if AProviderName.IsEmpty then
+    Exit('');
+  Result := FOAuthRefreshTokensList.Values[AProviderName.ToLower];
+end;
+
+procedure TRadIAConfig.SetOAuthRefreshToken(const AProviderName: string; const AValue: string);
+begin
+  if AProviderName.IsEmpty then
+    Exit;
+  FOAuthRefreshTokensList.Values[AProviderName.ToLower] := AValue;
+end;
+
+function TRadIAConfig.GetOAuthTokenExpiry(const AProviderName: string): TDateTime;
+var
+  LStr: string;
+begin
+  if AProviderName.IsEmpty then
+    Exit(0);
+  LStr := FOAuthTokenExpirationsList.Values[AProviderName.ToLower];
+  if LStr.IsEmpty then
+    Result := 0
+  else
+    Result := StrToFloatDef(LStr, 0, TFormatSettings.Invariant);
+end;
+
+procedure TRadIAConfig.SetOAuthTokenExpiry(const AProviderName: string; const AValue: TDateTime);
+begin
+  if AProviderName.IsEmpty then
+    Exit;
+  FOAuthTokenExpirationsList.Values[AProviderName.ToLower] := FloatToStr(AValue, TFormatSettings.Invariant);
 end;
 
 function TRadIAConfig.UnprotectString(const AValue: string): string;

@@ -1,4 +1,4 @@
-﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{B1C2D3E4-F5A6-7890-ABCD-EF1234567890}</ProjectGuid>
         <MainSource>RadIATests.dpr</MainSource>
@@ -118,6 +118,8 @@
         <DCCReference Include="..\Source\Integration\RadIA.OTA.ContextParser.pas"/>
         <DCCReference Include="..\Source\Integration\RadIA.OTA.MessageViewHook.pas"/>
         <DCCReference Include="..\Source\Core\RadIA.Core.Mediator.pas"/>
+        <DCCReference Include="..\Source\Core\RadIA.Core.OAuth.pas"/>
+        <DCCReference Include="..\Source\Core\RadIA.Core.IndyLoopback.pas"/>
         <DCCReference Include="..\Source\Providers\RadIA.Provider.Streaming.pas"/>
         <DCCReference Include="..\Source\Providers\RadIA.Provider.Base.pas"/>
         <DCCReference Include="..\Source\Providers\RadIA.Provider.Gemini.pas"/>
@@ -129,7 +131,6 @@
         <DCCReference Include="..\Source\Providers\RadIA.Provider.OpenRouter.pas"/>
         <DCCReference Include="..\Source\Providers\RadIA.Provider.Generic.pas"/>
         <DCCReference Include="..\Source\Providers\RadIA.Provider.LMStudio.pas"/>
-        <DCCReference Include="..\Source\Providers\RadIA.Provider.WebViewBridge.pas"/>
         <DCCReference Include="..\Source\Providers\RadIA.Provider.AzureOpenAI.pas"/>
         <DCCReference Include="..\Source\Providers\RadIA.Provider.Qwen.pas"/>
         <DCCReference Include="..\Source\Providers\RadIA.Provider.Mistral.pas"/>
@@ -162,6 +163,7 @@
         <DCCReference Include="Source\RadIA.Tests.ProjectGenerator.pas"/>
         <DCCReference Include="Source\RadIA.Tests.Container.pas"/>
         <DCCReference Include="Source\RadIA.Tests.Infrastructure.pas"/>
+        <DCCReference Include="Source\RadIA.Tests.OAuth.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

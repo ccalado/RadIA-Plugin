@@ -75,7 +75,6 @@ type
     FDTOBuilder: IRadIADTOBuilder;
     FProjectGenerator: IRadIAProjectGenerator;
 
-    procedure HandleBackgroundLoginComplete;
     procedure UpdateModelsCombo;
 
     procedure HandleUpdateModelsComboResult(AModels: TArray<string>; AProvider: IRadIAProvider);
@@ -110,7 +109,6 @@ type
     procedure PostToWebView(const AAction, ARole, AText: string; const AIsDone: Boolean;
         const AProvider: string = ''; const AModel: string = ''); overload;
 
-    procedure HandleOnbtnWebLoginConnectClick;
     procedure QueueOnUI(const AProcedure: TProc);
     procedure DispatchSystemMessage(const AAction: string; const AJson: TJSONObject; var AHandled: Boolean);
     procedure DispatchSessionMessage(const AAction: string; const AJson: TJSONObject; var AHandled: Boolean);
@@ -129,8 +127,6 @@ type
     procedure HandleSelectSessionMessage(const ASessionId: string);
     procedure HandleRenameSessionMessage(const ASessionId, AName: string);
     procedure HandleDeleteSessionMessage(const ASessionId: string);
-    procedure HandleWebLoginConnectMessage;
-    procedure HandleLoginCompleteMessage;
     procedure HandleErrorMessage(const AText: string);
     procedure HandleUpdateStreamMessage(const AText: string; const AIsDone: Boolean);
     procedure HandleSendPromptMessage(const AText: string);
@@ -191,11 +187,7 @@ type
     procedure HandleGenerateDTODone(const APromptText, AActiveProvider: string);
 
 
-    procedure OnWebViewBridgeSendPrompt(const APrompt: string);
-    procedure OnWebViewBridgeCancel;
-    procedure OnBackgroundBrowserMessage(const AMessage: string);
-    procedure OnBackgroundBrowserInitialized;
-    procedure OnBackgroundBrowserNavigation(const AUrl: string);
+    // Deprecated WebViewBridge methods
 
     {$IFDEF TESTS}
     function TestPreProcessPrompt(const APromptText: string): string;
@@ -210,7 +202,7 @@ implementation
 uses
   System.IOUtils, System.StrUtils, RadIA.Core.Config, RadIA.Core.Logger,
   RadIA.Core.ProviderRegistry, RadIA.Core.ConversationExporter,
-  RadIA.Core.DTO.Generator, RadIA.Core.ProjectGenerator, RadIA.Provider.WebViewBridge,
+  RadIA.Core.DTO.Generator, RadIA.Core.ProjectGenerator,
   System.SyncObjs, RadIA.Core.Container, RadIA.Core.ChatMessage, RadIA.Core.Service;
 
 { Helper Functions }
@@ -246,8 +238,7 @@ begin
   FCurrentBackgroundUrl := '';
   FLoginPopupOpen := False;
 
-  TRadIAWebViewBridgeProvider.OnSendPrompt := OnWebViewBridgeSendPrompt;
-  TRadIAWebViewBridgeProvider.OnCancel := OnWebViewBridgeCancel;
+  // WebViewBridge events removed
 
   if Assigned(AConfig) then
     FConfig := AConfig
@@ -301,9 +292,6 @@ begin
     end;
     FModelsProvider := nil;
   end;
-
-  TRadIAWebViewBridgeProvider.OnSendPrompt := nil;
-  TRadIAWebViewBridgeProvider.OnCancel := nil;
 
   if Assigned(FLifecycleGuard) then
     (FLifecycleGuard as IRadIALifecycleGuard).Invalidate;
@@ -536,15 +524,16 @@ begin
     LProvider := FModelsProvider;
     LProvider.FetchAvailableModelsAsync(
       procedure(AModels: TArray<string>; AError: string)
+      var
+        LProc: TThreadProcedure;
       begin
-        TThread.Queue(nil,
-          procedure
-          begin
-            if not LGuard.IsAlive then
-              Exit;
-            Self.HandleUpdateModelsComboResult(AModels, LProvider);
-          end
-        );
+        LProc := procedure
+                 begin
+                   if not LGuard.IsAlive then
+                     Exit;
+                   Self.HandleUpdateModelsComboResult(AModels, LProvider);
+                 end;
+        TThread.Queue(nil, LProc);
       end);
   except
     on E: Exception do
@@ -987,13 +976,7 @@ begin
     Self.PostToWebView('append_message', 'assistant', '', True, AActiveProvider, AActiveModel);
   end;
 
-  LIsWebError := SameText(AError, 'WebView Login session is not ready or active.') or
-                     SameText(AError, 'Input textarea not found in page.') or
-                     SameText(AError, 'Send button not found in page.');
-  if LIsWebError then
-  begin
-    Self.HandleOnbtnWebLoginConnectClick;
-  end;
+  // Web error handling removed
 end;
 
 procedure TRadIAChatPresenter.ProcessStreamChunk(const ACtx: TStreamChunkCtx;
@@ -1405,32 +1388,9 @@ begin
     end);
 end;
 
-procedure TRadIAChatPresenter.HandleWebLoginConnectMessage;
-begin
-  QueueOnUI(
-    procedure
-    begin
-      HandleOnbtnWebLoginConnectClick;
-    end);
-end;
-
-procedure TRadIAChatPresenter.HandleLoginCompleteMessage;
-begin
-  QueueOnUI(
-    procedure
-    begin
-      FBackgroundBrowserReady := True;
-      HandleBackgroundLoginComplete;
-    end);
-end;
-
 procedure TRadIAChatPresenter.HandleErrorMessage(const AText: string);
 begin
-  QueueOnUI(
-    procedure
-    begin
-      TRadIAWebViewBridgeProvider.ReceiveChunk('', True, AText);
-    end);
+  // Error handling
 end;
 
 procedure TRadIAChatPresenter.HandleUpdateStreamMessage(const AText: string; const AIsDone: Boolean);
@@ -1448,8 +1408,6 @@ begin
 
       PostToWebView('update_message', 'assistant', AText, AIsDone, LActiveProvider, LActiveModel);
 
-      if AIsDone then
-        TRadIAWebViewBridgeProvider.ReceiveChunk(AText, True, '');
     end);
 end;
 
@@ -1514,11 +1472,7 @@ end;
 procedure TRadIAChatPresenter.HandleStreamChunkMessage(const AText: string; const AIsDone: Boolean;
     const AError: string);
 begin
-  QueueOnUI(
-    procedure
-    begin
-      TRadIAWebViewBridgeProvider.ReceiveChunk(AText, AIsDone, AError);
-    end);
+  // WebViewBridge streaming deprecated
 end;
 
 procedure TRadIAChatPresenter.DispatchSystemMessage(const AAction: string;
@@ -1540,9 +1494,7 @@ begin
   else if AAction = 'change_model' then
     HandleChangeModelMessage(AJson.GetValue<string>('model', ''))
   else if AAction = 'web_login_connect' then
-    HandleWebLoginConnectMessage
-  else if SameText(AAction, 'login_complete') then
-    HandleLoginCompleteMessage
+    // web_login_connect deprecated
   else if AAction = 'error' then
     HandleErrorMessage(AJson.GetValue<string>('text', ''))
   else if AAction = 'create_project' then
@@ -1654,181 +1606,7 @@ begin
   end;
 end;
 
-procedure TRadIAChatPresenter.OnWebViewBridgeSendPrompt(const APrompt: string);
-var
-  LJson: TJSONObject;
-  LActiveProvider: string;
-  LUrl: string;
-begin
-  LActiveProvider := FConfig.GetActiveProvider;
-  LUrl := GetWebLoginUrl(LActiveProvider);
-  if LUrl.IsEmpty then
-  begin
-    TLogger.Log('OnWebViewBridgeSendPrompt: Active provider ' + LActiveProvider + ' does not support Web Login.', 'UI');
-    Exit;
-  end;
-
-  if not FView.IsBackgroundBrowserInitialized then
-  begin
-    TLogger.Log('OnWebViewBridgeSendPrompt: Background browser is not initialized yet. Queueing prompt ' +
-        'and initializing...', 'UI');
-    FPendingPrompt := APrompt;
-    FBackgroundBrowserReady := False;
-    FView.CreateBackgroundBrowser;
-    Exit;
-  end;
-
-  if not SameText(FCurrentBackgroundUrl, LUrl) then
-  begin
-    TLogger.Log(Format('OnWebViewBridgeSendPrompt: Navigating background browser to %s', [LUrl]), 'UI');
-    FPendingPrompt := APrompt;
-    FBackgroundBrowserReady := False;
-    FCurrentBackgroundUrl := LUrl;
-    FView.NavigateBackgroundBrowser(LUrl);
-    Exit;
-  end;
-
-  if not FBackgroundBrowserReady then
-  begin
-    TLogger.Log('OnWebViewBridgeSendPrompt: Background browser is navigating/loading. Queueing prompt.', 'UI');
-    FPendingPrompt := APrompt;
-    Exit;
-  end;
-
-  TLogger.Log('OnWebViewBridgeSendPrompt: Dispatching prompt to background web view.', 'UI');
-  FPendingPrompt := '';
-  LJson := TJSONObject.Create;
-  try
-    LJson.AddPair('action', 'send_prompt');
-
-    var LFinalPrompt := APrompt;
-    if not LFinalPrompt.Trim.IsEmpty then
-    begin
-      var LAdapter: IRadIAIDEAdapter;
-      var LInstruction: string := '';
-      if TRadIAContainer.TryResolve<IRadIAIDEAdapter>(LAdapter) then
-        LInstruction := LAdapter.GetPreferredLanguageInstruction;
-      if not LInstruction.IsEmpty then
-        LFinalPrompt := LFinalPrompt + sLineBreak + sLineBreak + LInstruction;
-    end;
-
-    LJson.AddPair('text', LFinalPrompt);
-    FView.PostMessageToBackgroundWeb(LJson.ToJSON);
-  finally
-    LJson.Free;
-  end;
-end;
-
-procedure TRadIAChatPresenter.OnWebViewBridgeCancel;
-var
-  LJson: TJSONObject;
-begin
-  if not FView.IsBackgroundBrowserInitialized then
-    Exit;
-
-  TLogger.Log('OnWebViewBridgeCancel: Dispatching cancellation to background web view.', 'UI');
-  LJson := TJSONObject.Create;
-  try
-    LJson.AddPair('action', 'cancel_request');
-    FView.PostMessageToBackgroundWeb(LJson.ToJSON);
-  finally
-    LJson.Free;
-  end;
-end;
-
-procedure TRadIAChatPresenter.OnBackgroundBrowserMessage(const AMessage: string);
-begin
-  ProcessWebMessage(AMessage);
-end;
-
-procedure TRadIAChatPresenter.OnBackgroundBrowserInitialized;
-var
-  LActiveProvider: string;
-  LUrl: string;
-begin
-  LActiveProvider := FConfig.GetActiveProvider;
-  LUrl := GetWebLoginUrl(LActiveProvider);
-  if LUrl.IsEmpty then
-    Exit;
-
-  TLogger.Log(Format('OnBackgroundBrowserInitialized: Background browser created. Navigating to %s', [LUrl]), 'UI');
-  FBackgroundBrowserReady := False;
-  FCurrentBackgroundUrl := LUrl;
-  FView.NavigateBackgroundBrowser(LUrl);
-end;
-
-procedure TRadIAChatPresenter.HandleBackgroundLoginComplete;
-begin
-  TLogger.Log('HandleBackgroundLoginComplete: Background browser is logged in and ready.', 'UI');
-  if not FPendingPrompt.IsEmpty then
-  begin
-    TLogger.Log('HandleBackgroundLoginComplete: Dispatching pending prompt.', 'UI');
-    OnWebViewBridgeSendPrompt(FPendingPrompt);
-  end;
-end;
-
-procedure TRadIAChatPresenter.OnBackgroundBrowserNavigation(const AUrl: string);
-var
-  LIsAuthPage: Boolean;
-begin
-  LIsAuthPage := AUrl.Contains('accounts.google.com') or
-                 AUrl.Contains('auth.openai.com') or
-                 AUrl.Contains('accounts.openai.com') or
-                 AUrl.Contains('/auth/login') or
-                 AUrl.Contains('ServiceLogin');
-
-  if LIsAuthPage then
-  begin
-    TLogger.Log('OnBackgroundBrowserNavigation: Auth page redirect detected. URL: ' + AUrl, 'UI');
-    TThread.Queue(nil,
-      TThreadProcedure(
-        procedure
-        begin
-          HandleOnbtnWebLoginConnectClick;
-        end
-      )
-    );
-  end;
-end;
-
-procedure TRadIAChatPresenter.HandleOnbtnWebLoginConnectClick;
-var
-  LActiveProvider: string;
-  LUrl: string;
-begin
-  if FLoginPopupOpen then
-  begin
-    TLogger.Log('HandleOnbtnWebLoginConnectClick: Login popup is already open. Ignoring request.', 'UI');
-    Exit;
-  end;
-
-  LActiveProvider := FConfig.GetActiveProvider;
-  LUrl := GetWebLoginUrl(LActiveProvider);
-  if LUrl.IsEmpty then
-    Exit;
-
-  TLogger.Log('HandleOnbtnWebLoginConnectClick: Opening popup form for ' + LActiveProvider, 'UI');
-
-  FLoginPopupOpen := True;
-  try
-    FView.ShowLoginWindow(LUrl,
-      procedure
-      begin
-        FLoginPopupOpen := False;
-        TLogger.Log('HandleOnbtnWebLoginConnectClick: Login completed successfully. Refreshing background ' +
-            'browser.', 'UI');
-        FConfig.SetProviderAuthType(LActiveProvider, 'web_login');
-        FConfig.Save;
-        FView.NavigateBackgroundBrowser(LUrl);
-      end);
-  except
-    on E: Exception do
-    begin
-      FLoginPopupOpen := False;
-      TLogger.Log('HandleOnbtnWebLoginConnectClick: Error showing login window: ' + E.Message, 'UI');
-    end;
-  end;
-end;
+// Deprecated Web Login / WebViewBridge implementations removed
 
 
 function TRadIAChatPresenter.ExtractCodeArgument(const AArgument: string): string;

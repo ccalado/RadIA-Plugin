@@ -168,8 +168,6 @@ type
     [Test]
     procedure TestWebMessageApplyCode;
     [Test]
-    procedure TestWebLoginStreamUsesGenericModelLabel;
-    [Test]
     procedure TestWebMessageChangeProvider;
     [Test]
     procedure TestWebMessageChangeModel;
@@ -649,22 +647,6 @@ begin
 
   Assert.IsTrue(FMockView.EditorTextReplaced);
   Assert.AreEqual('procedure ApplyDemo; begin end;', FMockView.ReplacedEditorTextValue);
-end;
-
-procedure TTestChatPresenter.TestWebLoginStreamUsesGenericModelLabel;
-begin
-  FPresenter.Initialize('C:\mock\web');
-  FPresenter.WebViewReady := True;
-  FConfig.SetActiveProvider('OpenAI');
-  FConfig.SetActiveModel('OpenAI', 'gpt-4o-mini');
-  FConfig.SetProviderAuthType('OpenAI', 'web_login');
-
-  FPresenter.ProcessWebMessage('{"action":"update_stream","text":"done","isDone":false}');
-  DrainQueuedCalls;
-
-  Assert.IsTrue(FMockView.LastPostedJson.Contains('"provider":"OpenAI"'));
-  Assert.IsTrue(True, 'Should post to web view');
-  Assert.IsFalse(FMockView.LastPostedJson.Contains('gpt-4o-mini'));
 end;
 
 procedure TTestChatPresenter.TestWebMessageChangeProvider;

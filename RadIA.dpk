@@ -61,6 +61,8 @@ contains
   RadIA.Core.ErrorDecoder in 'Source\Core\RadIA.Core.ErrorDecoder.pas',
   RadIA.Core.Localizer in 'Source\Core\RadIA.Core.Localizer.pas',
   RadIA.Core.EditorAdapter in 'Source\Core\RadIA.Core.EditorAdapter.pas',
+  RadIA.Core.OAuth in 'Source\Core\RadIA.Core.OAuth.pas',
+  RadIA.Core.IndyLoopback in 'Source\Core\RadIA.Core.IndyLoopback.pas',
   RadIA.Provider.Streaming in 'Source\Providers\RadIA.Provider.Streaming.pas',
   RadIA.Provider.Base in 'Source\Providers\RadIA.Provider.Base.pas',
   RadIA.Provider.Gemini in 'Source\Providers\RadIA.Provider.Gemini.pas',
@@ -72,7 +74,6 @@ contains
   RadIA.Provider.OpenRouter in 'Source\Providers\RadIA.Provider.OpenRouter.pas',
   RadIA.Provider.Generic in 'Source\Providers\RadIA.Provider.Generic.pas',
   RadIA.Provider.LMStudio in 'Source\Providers\RadIA.Provider.LMStudio.pas',
-  RadIA.Provider.WebViewBridge in 'Source\Providers\RadIA.Provider.WebViewBridge.pas',
   RadIA.Provider.GithubCopilot in 'Source\Providers\RadIA.Provider.GithubCopilot.pas',
   RadIA.Provider.AzureOpenAI in 'Source\Providers\RadIA.Provider.AzureOpenAI.pas',
   RadIA.Provider.Qwen in 'Source\Providers\RadIA.Provider.Qwen.pas',
@@ -92,7 +93,6 @@ contains
   RadIA.UI.ConfigFrame in 'Source\UI\RadIA.UI.ConfigFrame.pas' {FrameAIConfig: TFrame},
   RadIA.UI.ConfigForm in 'Source\UI\RadIA.UI.ConfigForm.pas' {FormAIConfig},
   RadIA.UI.DiffForm in 'Source\UI\RadIA.UI.DiffForm.pas' {FormAIDiff},
-  RadIA.UI.WebLoginForm in 'Source\UI\RadIA.UI.WebLoginForm.pas' {FormWebLogin},
   RadIA.UI.GithubAuthForm in 'Source\UI\RadIA.UI.GithubAuthForm.pas' {FormGithubAuth},
   RadIA.UI.Resources in 'Source\UI\RadIA.UI.Resources.pas';
 

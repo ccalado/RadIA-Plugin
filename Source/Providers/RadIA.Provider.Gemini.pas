@@ -14,6 +14,9 @@ type
     function ParseResponseBody(const AResponseJson: string; out AUsage: TTokenUsage): string;
     function TryExtractNextJsonObject(var ABuffer: string; out AJsonObjectStr: string): Boolean;
     procedure ParseAndEmitCandidate(const AJsonStr: string; const ACallback: TStreamChunkCallback);
+  protected
+    function GetOAuthTokenUrl: string; override;
+    function GetOAuthClientId: string; override;
   public
     constructor Create(const AConfig: IRadIAConfig); override;
 
@@ -30,9 +33,9 @@ type
 implementation
 
 uses
-  System.Classes,RadIA.Core.Types, System.JSON, System.Threading,
+  System.Classes, RadIA.Core.Types, System.JSON, System.Threading,
   System.Generics.Collections, System.NetEncoding, System.SyncObjs, System.Math,
-  RadIA.Core.Logger, RadIA.Core.ProviderRegistry;
+  RadIA.Core.Logger, RadIA.Core.ProviderRegistry, System.Net.URLClient, System.Net.HttpClient;
 
 { TRadIAGeminiProvider }
 
@@ -50,6 +53,16 @@ end;
 function TRadIAGeminiProvider.GetName: string;
 begin
   Result := 'Google Gemini';
+end;
+
+function TRadIAGeminiProvider.GetOAuthTokenUrl: string;
+begin
+  Result := 'https://oauth2.googleapis.com/token';
+end;
+
+function TRadIAGeminiProvider.GetOAuthClientId: string;
+begin
+  Result := 'radia-delphi-plugin-gemini';
 end;
 
 function TRadIAGeminiProvider.BuildRequestBody(const APrompt: string; const AHistory: TArray<IRadIAChatMessage>;
@@ -203,18 +216,29 @@ procedure TRadIAGeminiProvider.SendPromptAsync(const APrompt: string; const AHis
   const ACallback: TCompletionCallback; const ATemperature: Double; const AMaxTokens: Integer);
 var
   LUrl, LApiKey, LModel, LRequestBody: string;
+  LHeaders: TNetHeaders;
 begin
-  LApiKey := GetApiKey;
-  LModel := GetActiveModel;
-
-  if LApiKey.IsEmpty then
+  if not HasValidCredentials then
   begin
-    ACallback('', 'API Key is missing for Google Gemini. Please check settings.', False, TTokenUsage.Empty);
+    ACallback('', 'Credentials (API Key or OAuth Token) are missing or invalid for Google Gemini. Please check settings.', False, TTokenUsage.Empty);
     Exit;
   end;
 
-  LUrl := Format('https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s',
-    [LModel, TNetEncoding.URL.Encode(LApiKey)]);
+  LModel := GetActiveModel;
+
+  if SameText(FConfig.GetProviderAuthType(FProviderId), 'oauth') then
+  begin
+    LUrl := Format('https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent', [LModel]);
+    SetLength(LHeaders, 1);
+    LHeaders[0] := TNetHeader.Create('Authorization', 'Bearer ' + FConfig.GetOAuthAccessToken(FProviderId));
+  end
+  else
+  begin
+    LApiKey := GetApiKey;
+    LUrl := Format('https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s',
+      [LModel, TNetEncoding.URL.Encode(LApiKey)]);
+    LHeaders := nil;
+  end;
 
   try
     LRequestBody := BuildRequestBody(APrompt, AHistory, ATemperature, AMaxTokens);
@@ -226,7 +250,7 @@ begin
     end;
   end;
 
-  ExecuteRequestAsync(LUrl, nil, LRequestBody,
+  ExecuteRequestAsync(LUrl, LHeaders, LRequestBody,
     function(const AResponseJson: string; out AUsage: TTokenUsage): string
     begin
       Result := ParseResponseBody(AResponseJson, AUsage);
@@ -290,23 +314,35 @@ var
   LUrl: string;
   LTaskProc: TProc;
   LProviderRef: IRadIAProvider;
+  LHeaders: TNetHeaders;
 begin
   LProviderRef := Self;
-  LApiKey := GetApiKey;
-  if LApiKey.IsEmpty then
+
+  if not HasValidCredentials then
   begin
     if not GIsShuttingDown then
     begin
       TThread.Queue(nil,
         procedure
         begin
-          ACallback(GetAvailableModels, 'API Key is missing for Google Gemini. Using fallback models.');
+          ACallback(GetAvailableModels, 'Credentials (API Key or OAuth Token) are missing or invalid for Google Gemini. Using fallback models.');
         end);
     end;
     Exit;
   end;
 
-  LUrl := Format('https://generativelanguage.googleapis.com/v1beta/models?key=%s', [TNetEncoding.URL.Encode(LApiKey)]);
+  if SameText(FConfig.GetProviderAuthType(FProviderId), 'oauth') then
+  begin
+    LUrl := 'https://generativelanguage.googleapis.com/v1beta/models';
+    SetLength(LHeaders, 1);
+    LHeaders[0] := TNetHeader.Create('Authorization', 'Bearer ' + FConfig.GetOAuthAccessToken(FProviderId));
+  end
+  else
+  begin
+    LApiKey := GetApiKey;
+    LUrl := Format('https://generativelanguage.googleapis.com/v1beta/models?key=%s', [TNetEncoding.URL.Encode(LApiKey)]);
+    LHeaders := nil;
+  end;
 
   LTaskProc := procedure
                var
@@ -320,7 +356,7 @@ begin
                    LProviderRef.GetProviderId;
 
                    try
-                     LResponseText := DoGetRequest(LUrl, nil, 5000);
+                     LResponseText := DoGetRequest(LUrl, LHeaders, 5000);
                      LModelsList := ParseAvailableModelsFromJson(LResponseText);
                      try
                        if LModelsList.Count = 0 then
@@ -499,18 +535,29 @@ procedure TRadIAGeminiProvider.SendPromptStreamAsync(const APrompt: string; cons
   const ACallback: TStreamChunkCallback; const ATemperature: Double; const AMaxTokens: Integer);
 var
   LUrl, LApiKey, LModel, LRequestBody: string;
+  LHeaders: TNetHeaders;
 begin
-  LApiKey := GetApiKey;
-  LModel := GetActiveModel;
-
-  if LApiKey.IsEmpty then
+  if not HasValidCredentials then
   begin
-    ACallback('', True, 'API Key is missing for Google Gemini. Please check settings.');
+    ACallback('', True, 'Credentials (API Key or OAuth Token) are missing or invalid for Google Gemini. Please check settings.');
     Exit;
   end;
 
-  LUrl := Format('https://generativelanguage.googleapis.com/v1beta/models/%s:streamGenerateContent?key=%s',
-    [LModel, TNetEncoding.URL.Encode(LApiKey)]);
+  LModel := GetActiveModel;
+
+  if SameText(FConfig.GetProviderAuthType(FProviderId), 'oauth') then
+  begin
+    LUrl := Format('https://generativelanguage.googleapis.com/v1beta/models/%s:streamGenerateContent', [LModel]);
+    SetLength(LHeaders, 1);
+    LHeaders[0] := TNetHeader.Create('Authorization', 'Bearer ' + FConfig.GetOAuthAccessToken(FProviderId));
+  end
+  else
+  begin
+    LApiKey := GetApiKey;
+    LUrl := Format('https://generativelanguage.googleapis.com/v1beta/models/%s:streamGenerateContent?key=%s',
+      [LModel, TNetEncoding.URL.Encode(LApiKey)]);
+    LHeaders := nil;
+  end;
 
   try
     LRequestBody := BuildRequestBody(APrompt, AHistory, ATemperature, AMaxTokens);
@@ -522,7 +569,7 @@ begin
     end;
   end;
 
-  ExecuteRequestStreamAsync(LUrl, nil, LRequestBody,
+  ExecuteRequestStreamAsync(LUrl, LHeaders, LRequestBody,
     function(const ABuffer: string): string
     var
       LTemp: string;

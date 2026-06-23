@@ -3,7 +3,8 @@ unit RadIA.UI.ConfigPresenter;
 interface
 
 uses
-  Vcl.Graphics, RadIA.Core.Interfaces, RadIA.Core.PromptTemplates;
+  System.Classes, System.SysUtils, Vcl.Graphics, RadIA.Core.Interfaces, RadIA.Core.PromptTemplates,
+  RadIA.Core.OAuth;
 
 type
   IRadIAConfigView = interface
@@ -61,6 +62,7 @@ type
     function GetQuotaLimit: string;
     procedure SetQuotaLimit(const AValue: string);
     procedure SetQuotaUsedText(const AText: string);
+    procedure UpdateOAuthState(const AProviderId: string; const AIsLoggedIn: Boolean);
 
     // Dialogs and lifecycle
     procedure ShowMessageDialog(const AMessage: string);
@@ -89,6 +91,7 @@ type
     FTemplateManager: TPromptTemplateManager;
     FOwnsTemplateManager: Boolean;
     FProvidersList: TArray<string>;
+    FOAuthManager: TRadIAOAuthManager;
 
     function ValidateUrl(const AUrl: string; const AFieldName: string): Boolean;
     function ValidateUrls(const AOllamaUrl, AOpenAIUrl, ALMStudioUrl, AAzureUrl: string): Boolean;
@@ -118,6 +121,8 @@ type
     procedure ResetQuota;
     procedure ConnectGithub(const AToken: string);
     procedure ImportVSCodeCopilotToken(const AToken: string; const AUser: string);
+    procedure StartOAuthLogin(const AProviderName: string);
+    procedure PerformOAuthLogoff(const AProviderName: string);
 
     property TemplateManager: TPromptTemplateManager read FTemplateManager;
   end;
@@ -125,7 +130,8 @@ type
 implementation
 
 uses
-  System.SysUtils, RadIA.Core.Config, RadIA.Core.Container;
+  RadIA.Core.Config, RadIA.Core.Container,
+  RadIA.Core.IndyLoopback;
 
 { TRadIAConfigPresenter }
 
@@ -134,6 +140,7 @@ constructor TRadIAConfigPresenter.Create(const AView: IRadIAConfigView; const AC
 begin
   inherited Create;
   FView := AView;
+  FOAuthManager := nil;
   FProvidersList := [
     'Gemini', 'OpenAI', 'Claude', 'DeepSeek', 'Groq', 'Ollama',
     'OpenRouter', 'LMStudio', 'GithubCopilot', 'AzureOpenAI',
@@ -162,6 +169,8 @@ destructor TRadIAConfigPresenter.Destroy;
 begin
   if FOwnsTemplateManager then
     FTemplateManager.Free;
+  if Assigned(FOAuthManager) then
+    FOAuthManager.Free;
   inherited Destroy;
 end;
 
@@ -185,15 +194,27 @@ var
 begin
   LFormatSettings := TFormatSettings.Invariant;
 
-  if FConfig.GetProviderAuthType('Gemini') = 'web_login' then
-    FView.SetAuthTypeIndex('Gemini', 1)
+  if SameText(FConfig.GetProviderAuthType('Gemini'), 'oauth') or SameText(FConfig.GetProviderAuthType('Gemini'), 'web_login') then
+  begin
+    FView.SetAuthTypeIndex('Gemini', 1);
+    FView.UpdateOAuthState('Gemini', not FConfig.GetOAuthAccessToken('Gemini').IsEmpty);
+  end
   else
+  begin
     FView.SetAuthTypeIndex('Gemini', 0);
+    FView.UpdateOAuthState('Gemini', False);
+  end;
 
-  if FConfig.GetProviderAuthType('OpenAI') = 'web_login' then
-    FView.SetAuthTypeIndex('OpenAI', 1)
+  if SameText(FConfig.GetProviderAuthType('OpenAI'), 'oauth') or SameText(FConfig.GetProviderAuthType('OpenAI'), 'web_login') then
+  begin
+    FView.SetAuthTypeIndex('OpenAI', 1);
+    FView.UpdateOAuthState('OpenAI', not FConfig.GetOAuthAccessToken('OpenAI').IsEmpty);
+  end
   else
+  begin
     FView.SetAuthTypeIndex('OpenAI', 0);
+    FView.UpdateOAuthState('OpenAI', False);
+  end;
 
   FView.SetApiKey('Gemini', FConfig.GetApiKey('Gemini'));
   FView.SetApiKey('OpenAI', FConfig.GetApiKey('OpenAI'));
@@ -624,6 +645,77 @@ begin
     FView.ShowMessageDialog(Format('Token successfully imported from GitHub account "%s" of VS Code!', [AUser]))
   else
     FView.ShowMessageDialog('Token successfully imported from VS Code!');
+end;
+
+procedure TRadIAConfigPresenter.StartOAuthLogin(const AProviderName: string);
+var
+  LAuthUrl, LTokenUrl, LClientId: string;
+  LPort: Word;
+begin
+  if SameText(AProviderName, 'OpenAI') then
+  begin
+    LAuthUrl := 'https://auth.openai.com/oauth/authorize';
+    LTokenUrl := 'https://auth.openai.com/oauth/token';
+    LClientId := 'radia-delphi-plugin';
+    LPort := 59182;
+  end
+  else if SameText(AProviderName, 'Gemini') then
+  begin
+    LAuthUrl := 'https://accounts.google.com/o/oauth2/v2/auth';
+    LTokenUrl := 'https://oauth2.googleapis.com/token';
+    LClientId := 'radia-delphi-plugin-gemini';
+    LPort := 59183;
+  end
+  else
+    Exit;
+
+  if not Assigned(FOAuthManager) then
+    FOAuthManager := TRadIAOAuthManager.Create(FConfig, TRadIAIndyLoopbackServer.Create);
+
+  try
+    FView.ShowMessageDialog('Please complete login in the opened browser window...');
+    FOAuthManager.StartLogin(
+      AProviderName,
+      LAuthUrl,
+      LTokenUrl,
+      LClientId,
+      LPort,
+      procedure
+      begin
+        TThread.Queue(nil,
+          procedure
+          begin
+            FConfig.SetProviderAuthType(AProviderName, 'oauth');
+            FConfig.Save;
+            FView.UpdateOAuthState(AProviderName, True);
+            FView.ShowMessageDialog('Login completed successfully for ' + AProviderName);
+          end);
+      end,
+      procedure(AError: string)
+      begin
+        TThread.Queue(nil,
+          procedure
+          begin
+            FView.UpdateOAuthState(AProviderName, False);
+            FView.ShowMessageDialog('OAuth login failed: ' + AError);
+          end);
+      end
+    );
+  except
+    on E: Exception do
+    begin
+      FView.ShowMessageDialog('Failed to start OAuth flow: ' + E.Message);
+    end;
+  end;
+end;
+
+procedure TRadIAConfigPresenter.PerformOAuthLogoff(const AProviderName: string);
+begin
+  FConfig.ClearOAuthTokens(AProviderName);
+  FConfig.SetProviderAuthType(AProviderName, 'api_key');
+  FConfig.Save;
+  FView.UpdateOAuthState(AProviderName, False);
+  FView.ShowMessageDialog('Successfully logged out from ' + AProviderName);
 end;
 
 end.

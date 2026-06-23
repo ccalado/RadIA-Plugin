@@ -3,7 +3,7 @@ unit RadIA.Provider.Base;
 interface
 
 uses
-  System.SysUtils, System.Net.URLClient,
+  System.SysUtils, System.Net.URLClient, System.SyncObjs,
   RadIA.Core.Interfaces, RadIA.Core.TokenUsage;
 
 type
@@ -19,6 +19,11 @@ type
     FHTTPClient: IRadIAHttpClient;
     FErrorDecoder: IRadIAErrorDecoder;
     FCancelled: Boolean;
+    FRefreshLock: TCriticalSection;
+
+    function GetOAuthTokenUrl: string; virtual;
+    function GetOAuthClientId: string; virtual;
+    function HasValidCredentials: Boolean; virtual;
 
     function GetApiKey: string;
     function GetActiveModel: string;
@@ -86,9 +91,9 @@ type
 implementation
 
 uses
-  System.JSON, System.Generics.Collections, System.Math, RadIA.Core.Logger, System.SyncObjs,
+  System.JSON, System.Generics.Collections, System.Math, RadIA.Core.Logger,
   RadIA.Core.Container, RadIA.Core.HttpClient, RadIA.Core.ErrorDecoder, System.Classes, System.Net.HttpClient,
-      System.Threading, RadIA.Core.Types, RadIA.Provider.Streaming;
+      System.Threading, RadIA.Core.Types, RadIA.Provider.Streaming, RadIA.Core.OAuth, System.DateUtils;
 
 const
   CLogPreviewMaxLength = 320;
@@ -177,6 +182,7 @@ constructor TRadIAProviderBase.Create(const AConfig: IRadIAConfig);
 begin
   inherited Create;
   FConfig := AConfig;
+  FRefreshLock := TCriticalSection.Create;
 
   if not TRadIAContainer.TryResolve<IRadIAHttpClient>(FHTTPClient) then
     FHTTPClient := TRadIAConcreteHttpClient.Create;
@@ -191,6 +197,7 @@ destructor TRadIAProviderBase.Destroy;
 begin
   FHTTPClient := nil;
   FErrorDecoder := nil;
+  FRefreshLock.Free;
   inherited Destroy;
 end;
 
@@ -207,6 +214,16 @@ end;
 function TRadIAProviderBase.GetProviderId: string;
 begin
   Result := FProviderId;
+end;
+
+function TRadIAProviderBase.GetOAuthTokenUrl: string;
+begin
+  Result := '';
+end;
+
+function TRadIAProviderBase.GetOAuthClientId: string;
+begin
+  Result := '';
 end;
 
 procedure TRadIAProviderBase.CancelCurrentRequest;
@@ -867,7 +884,46 @@ end;
 
 function TRadIAOpenAICompatibleProvider.GetAuthorizationHeader: string;
 begin
-  Result := 'Bearer ' + GetApiKey;
+  if SameText(FConfig.GetProviderAuthType(FProviderId), 'oauth') then
+    Result := 'Bearer ' + FConfig.GetOAuthAccessToken(FProviderId)
+  else
+    Result := 'Bearer ' + GetApiKey;
+end;
+
+function TRadIAProviderBase.HasValidCredentials: Boolean;
+var
+  LAuthType: string;
+  LOAuth: TRadIAOAuthManager;
+  LTokenUrl, LClientId: string;
+begin
+  LAuthType := FConfig.GetProviderAuthType(FProviderId);
+  if SameText(LAuthType, 'oauth') then
+  begin
+    FRefreshLock.Acquire;
+    try
+      if FConfig.GetOAuthAccessToken(FProviderId).IsEmpty or
+         ((FConfig.GetOAuthTokenExpiry(FProviderId) <> 0) and
+          (FConfig.GetOAuthTokenExpiry(FProviderId) <= System.DateUtils.IncMinute(Now, 5))) then
+      begin
+        LTokenUrl := GetOAuthTokenUrl;
+        LClientId := GetOAuthClientId;
+        if (not LTokenUrl.IsEmpty) and (not LClientId.IsEmpty) then
+        begin
+          LOAuth := TRadIAOAuthManager.Create(FConfig, nil);
+          try
+            LOAuth.RefreshAccessToken(FProviderId, LTokenUrl, LClientId);
+          finally
+            LOAuth.Free;
+          end;
+        end;
+      end;
+    finally
+      FRefreshLock.Release;
+    end;
+    Result := not FConfig.GetOAuthAccessToken(FProviderId).IsEmpty;
+  end
+  else
+    Result := not GetApiKey.IsEmpty;
 end;
 
 procedure TRadIAOpenAICompatibleProvider.SendPromptAsync(const APrompt: string;
@@ -877,9 +933,9 @@ var
   LUrl, LRequestBody: string;
   LHeaders: TNetHeaders;
 begin
-  if GetApiKey.IsEmpty then
+  if not HasValidCredentials then
   begin
-    ACallback('', Format('API Key is missing for %s. Please check settings.', [GetName]), False, TTokenUsage.Empty);
+    ACallback('', Format('Credentials (API Key or OAuth Token) are missing or invalid for %s. Please check settings.', [GetName]), False, TTokenUsage.Empty);
     Exit;
   end;
 
@@ -911,9 +967,9 @@ var
   LUrl, LRequestBody: string;
   LHeaders: TNetHeaders;
 begin
-  if GetApiKey.IsEmpty then
+  if not HasValidCredentials then
   begin
-    ACallback('', True, Format('API Key is missing for %s. Please check settings.', [GetName]));
+    ACallback('', True, Format('Credentials (API Key or OAuth Token) are missing or invalid for %s. Please check settings.', [GetName]));
     Exit;
   end;
 
