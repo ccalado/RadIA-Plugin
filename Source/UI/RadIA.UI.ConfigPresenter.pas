@@ -332,18 +332,12 @@ begin
   LFormatSettings := TFormatSettings.Invariant;
 
   if FView.GetAuthTypeIndex('Gemini') = 1 then
-  begin
-    if not SameText(FConfig.GetProviderAuthType('Gemini'), 'oauth') then
-      FConfig.SetProviderAuthType('Gemini', 'web_login');
-  end
+    FConfig.SetProviderAuthType('Gemini', 'oauth')
   else
     FConfig.SetProviderAuthType('Gemini', 'api_key');
 
   if FView.GetAuthTypeIndex('OpenAI') = 1 then
-  begin
-    if not SameText(FConfig.GetProviderAuthType('OpenAI'), 'oauth') then
-      FConfig.SetProviderAuthType('OpenAI', 'web_login');
-  end
+    FConfig.SetProviderAuthType('OpenAI', 'oauth')
   else
     FConfig.SetProviderAuthType('OpenAI', 'api_key');
 

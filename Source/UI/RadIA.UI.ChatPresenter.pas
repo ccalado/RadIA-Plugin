@@ -747,6 +747,9 @@ begin
 
   FTemplateManager.Load;
   Initialize(FWebFilesDir);
+
+  if FWebViewReady then
+    SendInitialConfigToWeb;
 end;
 
 procedure TRadIAChatPresenter.HandlePromptInputKeyDown(var Key: Word; const Shift: TShiftState);
