@@ -78,6 +78,14 @@ Para evitar quebras de build, observe atentamente as seguintes limitações do c
     end;
     ```
 
+### 2.7 Diretrizes contra Code Smells Comuns (Linter & SonarQube)
+Para evitar alertas e manter o dashboard do SonarQube com nota máxima de qualidade, siga estas práticas ao criar e modificar código Object Pascal:
+
+*   **Evite imports na Interface (ImportSpecificity & UnusedImport):** Sempre que possível, coloque as units na cláusula `uses` da seção `implementation`. Declare imports na seção `interface` apenas quando os tipos declarados neles forem estritamente necessários na assinatura pública da unit (como tipos de parâmetros de métodos públicos ou classes ancestrais).
+*   **Encapsulamento de Campos de Classe (PublicField):** NUNCA declare campos de variáveis diretamente na seção `public` de uma classe. Mantenha os campos na seção `private` ou `protected` (iniciando com o prefixo `F`) e exponha-os publicamente usando propriedades (`property`).
+*   **Tratamento de Rotinas Vazias (EmptyRoutine):** Evite declarar procedimentos ou funções sem código interno (`begin end;`). Se um método precisar ficar vazio por imposição de herança ou callback visual da VCL, adicione um comentário detalhando o motivo (ex: `// Propositalmente vazio para callback...`) ou uma instrução inócua simples (ex: `if True then ;`).
+*   **Redução de Complexidade Cognitiva (CognitiveComplexityRoutine):** Mantenha o fluxo de controle de qualquer rotina o mais simples possível. Evite aninhamentos profundos de condicionais (`if`, `try`, `except` e laços `for/while` aninhados). O limite de complexidade cognitiva por rotina é **15**. Se ultrapassar esse limite, refatore a lógica dividindo-a em métodos auxiliares menores com responsabilidade única (*Extract Method*).
+
 ---
 
 ## 3. Convenções de Nomenclatura (Style Guide)
