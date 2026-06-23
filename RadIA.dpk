@@ -31,7 +31,10 @@ requires
   rtl,
   vcl,
   vclie,
-  designide;
+  designide,
+  IndySystem,
+  IndyCore,
+  IndyProtocols;
 
 contains
   RadIA.Core.Types in 'Source\Core\RadIA.Core.Types.pas',
