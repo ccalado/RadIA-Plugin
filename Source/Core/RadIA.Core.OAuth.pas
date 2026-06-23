@@ -20,6 +20,7 @@ type
     FAuthUrl: string;
     FTokenUrl: string;
     FClientId: string;
+    FClientSecret: string;
     FRedirectUri: string;
     FPort: Word;
     FOnSuccess: TProc;
@@ -43,12 +44,18 @@ type
       const AAuthUrl: string;
       const ATokenUrl: string;
       const AClientId: string;
+      const AClientSecret: string;
       const APort: Word;
       const AOnSuccess: TProc;
       const AOnError: TProc<string>
     );
     procedure CancelLogin;
-    function RefreshAccessToken(const AProvider: string; const ATokenUrl, AClientId: string): Boolean;
+    function RefreshAccessToken(
+      const AProvider: string;
+      const ATokenUrl: string;
+      const AClientId: string;
+      const AClientSecret: string = ''
+    ): Boolean;
 
     class function GenerateVerifier: string;
     class function GenerateChallenge(const AVerifier: string): string;
@@ -134,6 +141,7 @@ procedure TRadIAOAuthManager.StartLogin(
   const AAuthUrl: string;
   const ATokenUrl: string;
   const AClientId: string;
+  const AClientSecret: string;
   const APort: Word;
   const AOnSuccess: TProc;
   const AOnError: TProc<string>
@@ -147,6 +155,7 @@ begin
   FAuthUrl := AAuthUrl;
   FTokenUrl := ATokenUrl;
   FClientId := AClientId;
+  FClientSecret := AClientSecret;
   FPort := APort;
   FOnSuccess := AOnSuccess;
   FOnError := AOnError;
@@ -193,9 +202,13 @@ end;
 
 procedure TRadIAOAuthManager.HandleCallback(const ACode, AError: string);
 begin
-  // Stop server immediately to release the port
-  if Assigned(FLoopbackServer) then
-    FLoopbackServer.Stop;
+  // Stop server asynchronously on the main thread to prevent Indy connection deadlock
+  TThread.Queue(nil,
+    procedure
+    begin
+      if Assigned(FLoopbackServer) then
+        FLoopbackServer.Stop;
+    end);
 
   if not AError.IsEmpty then
   begin
@@ -273,6 +286,9 @@ begin
                   '&redirect_uri=' + TNetEncoding.URL.Encode(FRedirectUri) +
                   '&code_verifier=' + TNetEncoding.URL.Encode(FCodeVerifier);
 
+  if not FClientSecret.IsEmpty then
+    LRequestBody := LRequestBody + '&client_secret=' + TNetEncoding.URL.Encode(FClientSecret);
+
   try
     LResponseJson := FHTTPClient.Post(FTokenUrl, LHeaders, LRequestBody);
     if SaveTokenResponse(FProviderName, LResponseJson) then
@@ -289,9 +305,10 @@ begin
   except
     on E: ERadIAHttpException do
     begin
-      TLogger.Log(Format('HTTP Exception during token exchange: %d - %s', [E.StatusCode, E.Message]), 'OAuth');
+      TLogger.Log(Format('HTTP Exception during token exchange: %d - %s - Content: %s',
+        [E.StatusCode, E.Message, E.Content]), 'OAuth');
       if Assigned(FOnError) then
-        FOnError('Token exchange failed with HTTP error: ' + E.StatusCode.ToString);
+        FOnError('Token exchange failed with HTTP error: ' + E.StatusCode.ToString + sLineBreak + E.Content);
     end;
     on E: Exception do
     begin
@@ -302,7 +319,12 @@ begin
   end;
 end;
 
-function TRadIAOAuthManager.RefreshAccessToken(const AProvider: string; const ATokenUrl, AClientId: string): Boolean;
+function TRadIAOAuthManager.RefreshAccessToken(
+  const AProvider: string;
+  const ATokenUrl: string;
+  const AClientId: string;
+  const AClientSecret: string
+): Boolean;
 var
   LHeaders: TNetHeaders;
   LRequestBody: string;
@@ -324,6 +346,9 @@ begin
   LRequestBody := 'client_id=' + TNetEncoding.URL.Encode(AClientId) +
                   '&grant_type=refresh_token' +
                   '&refresh_token=' + TNetEncoding.URL.Encode(LRefreshToken);
+
+  if not AClientSecret.IsEmpty then
+    LRequestBody := LRequestBody + '&client_secret=' + TNetEncoding.URL.Encode(AClientSecret);
 
   try
     LResponseJson := FHTTPClient.Post(ATokenUrl, LHeaders, LRequestBody);

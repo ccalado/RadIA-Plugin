@@ -139,6 +139,15 @@ begin
   SaveWindowPlacement;
   (FLifecycleGuard as IRadIALifecycleGuard).Invalidate;
   FAIService := nil;
+
+  if GIsShuttingDown then
+  begin
+    if Assigned(EdgeBrowser) then
+    begin
+      EdgeBrowser.Parent := nil;
+      Self.RemoveComponent(EdgeBrowser);
+    end;
+  end;
 end;
 
 procedure TRadIAFormAIDiff.LoadWindowPlacement;

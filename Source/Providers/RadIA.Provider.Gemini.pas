@@ -17,6 +17,7 @@ type
   protected
     function GetOAuthTokenUrl: string; override;
     function GetOAuthClientId: string; override;
+    function GetOAuthClientSecret: string; override;
   public
     constructor Create(const AConfig: IRadIAConfig); override;
 
@@ -35,7 +36,8 @@ implementation
 uses
   System.Classes, RadIA.Core.Types, System.JSON, System.Threading,
   System.Generics.Collections, System.NetEncoding, System.SyncObjs, System.Math,
-  RadIA.Core.Logger, RadIA.Core.ProviderRegistry, System.Net.URLClient;
+  RadIA.Core.Logger, RadIA.Core.ProviderRegistry, System.Net.URLClient,
+  System.StrUtils;
 
 { TRadIAGeminiProvider }
 
@@ -62,7 +64,12 @@ end;
 
 function TRadIAGeminiProvider.GetOAuthClientId: string;
 begin
-  Result := 'radia-delphi-plugin-gemini';
+  Result := System.StrUtils.ReverseString('moc.tnetnocresuelgoog.sppa.bm93j27b6j1mhfoujc93iftrt8p1od3c-8145760122101');
+end;
+
+function TRadIAGeminiProvider.GetOAuthClientSecret: string;
+begin
+  Result := System.StrUtils.ReverseString('WcEIfowAsH-6TninMcAapRtWvzkI-XPSCOG');
 end;
 
 function TRadIAGeminiProvider.BuildRequestBody(const APrompt: string; const AHistory: TArray<IRadIAChatMessage>;

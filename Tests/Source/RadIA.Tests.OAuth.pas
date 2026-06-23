@@ -217,6 +217,7 @@ begin
     'https://auth.openai.com/oauth/authorize',
     'https://auth.openai.com/oauth/token',
     'radia-delphi-plugin',
+    '',
     59182,
     nil,
     nil
@@ -246,6 +247,7 @@ begin
     'https://auth.openai.com/oauth/authorize',
     'https://auth.openai.com/oauth/token',
     'radia-delphi-plugin',
+    '',
     59182,
     procedure
     begin
@@ -274,6 +276,7 @@ begin
     'https://auth.openai.com/oauth/authorize',
     'https://auth.openai.com/oauth/token',
     'radia-delphi-plugin',
+    '',
     59182,
     nil,
     nil
@@ -302,6 +305,7 @@ begin
     'https://auth.openai.com/oauth/authorize',
     'https://auth.openai.com/oauth/token',
     'radia-delphi-plugin',
+    '',
     59182,
     procedure
     begin
@@ -344,6 +348,7 @@ begin
     'https://auth.openai.com/oauth/authorize',
     'https://auth.openai.com/oauth/token',
     'radia-delphi-plugin',
+    '',
     59182,
     procedure
     begin

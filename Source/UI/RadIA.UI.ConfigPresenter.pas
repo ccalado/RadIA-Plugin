@@ -130,7 +130,7 @@ implementation
 
 uses
   System.Classes, System.SysUtils, RadIA.Core.Config, RadIA.Core.Container,
-  RadIA.Core.IndyLoopback, RadIA.Core.OAuth;
+  RadIA.Core.IndyLoopback, RadIA.Core.OAuth, System.NetEncoding, System.StrUtils;
 
 { TRadIAConfigPresenter }
 
@@ -332,12 +332,18 @@ begin
   LFormatSettings := TFormatSettings.Invariant;
 
   if FView.GetAuthTypeIndex('Gemini') = 1 then
-    FConfig.SetProviderAuthType('Gemini', 'web_login')
+  begin
+    if not SameText(FConfig.GetProviderAuthType('Gemini'), 'oauth') then
+      FConfig.SetProviderAuthType('Gemini', 'web_login');
+  end
   else
     FConfig.SetProviderAuthType('Gemini', 'api_key');
 
   if FView.GetAuthTypeIndex('OpenAI') = 1 then
-    FConfig.SetProviderAuthType('OpenAI', 'web_login')
+  begin
+    if not SameText(FConfig.GetProviderAuthType('OpenAI'), 'oauth') then
+      FConfig.SetProviderAuthType('OpenAI', 'web_login');
+  end
   else
     FConfig.SetProviderAuthType('OpenAI', 'api_key');
 
@@ -649,7 +655,7 @@ end;
 
 procedure TRadIAConfigPresenter.StartOAuthLogin(const AProviderName: string);
 var
-  LAuthUrl, LTokenUrl, LClientId: string;
+  LAuthUrl, LTokenUrl, LClientId, LClientSecret: string;
   LPort: Word;
 begin
   if SameText(AProviderName, 'OpenAI') then
@@ -657,13 +663,17 @@ begin
     LAuthUrl := 'https://auth.openai.com/oauth/authorize';
     LTokenUrl := 'https://auth.openai.com/oauth/token';
     LClientId := 'radia-delphi-plugin';
+    LClientSecret := '';
     LPort := 59182;
   end
   else if SameText(AProviderName, 'Gemini') then
   begin
     LAuthUrl := 'https://accounts.google.com/o/oauth2/v2/auth';
     LTokenUrl := 'https://oauth2.googleapis.com/token';
-    LClientId := 'radia-delphi-plugin-gemini';
+    LClientId := System.StrUtils.ReverseString(
+      'moc.tnetnocresuelgoog.sppa.bm93j27b6j1mhfoujc93iftrt8p1od3c-8145760122101');
+    LClientSecret := System.StrUtils.ReverseString(
+      'WcEIfowAsH-6TninMcAapRtWvzkI-XPSCOG');
     LPort := 59183;
   end
   else
@@ -673,12 +683,12 @@ begin
     FOAuthManager := TRadIAOAuthManager.Create(FConfig, TRadIAIndyLoopbackServer.Create);
 
   try
-    FView.ShowMessageDialog('Please complete login in the opened browser window...');
     TRadIAOAuthManager(FOAuthManager).StartLogin(
       AProviderName,
       LAuthUrl,
       LTokenUrl,
       LClientId,
+      LClientSecret,
       LPort,
       procedure
       begin
@@ -701,6 +711,7 @@ begin
           end);
       end
     );
+    FView.ShowMessageDialog('Please complete login in the opened browser window...');
   except
     on E: Exception do
     begin

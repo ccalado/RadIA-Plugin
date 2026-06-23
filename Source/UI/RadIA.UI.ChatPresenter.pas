@@ -344,6 +344,10 @@ begin
     if FConfig.IsWebLoginProvider(AProviderId) then
       Exit(True);
 
+    if SameText(FConfig.GetProviderAuthType(AProviderId), 'oauth') then
+      Exit(not FConfig.GetOAuthAccessToken(AProviderId).Trim.IsEmpty or
+           not FConfig.GetOAuthRefreshToken(AProviderId).Trim.IsEmpty);
+
     Result := not FConfig.GetApiKey(AProviderId).Trim.IsEmpty;
   end;
 end;

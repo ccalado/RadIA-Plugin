@@ -23,6 +23,7 @@ type
 
     function GetOAuthTokenUrl: string; virtual;
     function GetOAuthClientId: string; virtual;
+    function GetOAuthClientSecret: string; virtual;
     function HasValidCredentials: Boolean; virtual;
 
     function GetApiKey: string;
@@ -222,6 +223,11 @@ begin
 end;
 
 function TRadIAProviderBase.GetOAuthClientId: string;
+begin
+  Result := '';
+end;
+
+function TRadIAProviderBase.GetOAuthClientSecret: string;
 begin
   Result := '';
 end;
@@ -894,7 +900,7 @@ function TRadIAProviderBase.HasValidCredentials: Boolean;
 var
   LAuthType: string;
   LOAuth: TRadIAOAuthManager;
-  LTokenUrl, LClientId: string;
+  LTokenUrl, LClientId, LClientSecret: string;
 begin
   LAuthType := FConfig.GetProviderAuthType(FProviderId);
   if SameText(LAuthType, 'oauth') then
@@ -907,11 +913,12 @@ begin
       begin
         LTokenUrl := GetOAuthTokenUrl;
         LClientId := GetOAuthClientId;
+        LClientSecret := GetOAuthClientSecret;
         if (not LTokenUrl.IsEmpty) and (not LClientId.IsEmpty) then
         begin
           LOAuth := TRadIAOAuthManager.Create(FConfig, nil);
           try
-            LOAuth.RefreshAccessToken(FProviderId, LTokenUrl, LClientId);
+            LOAuth.RefreshAccessToken(FProviderId, LTokenUrl, LClientId, LClientSecret);
           finally
             LOAuth.Free;
           end;
