@@ -7,6 +7,21 @@ uses
 
 type
 
+  TRadIAOAuthParams = record
+    AuthUrl: string;
+    TokenUrl: string;
+    ClientId: string;
+    ClientSecret: string;
+    Port: Word;
+    constructor Create(
+      const AAuthUrl: string;
+      const ATokenUrl: string;
+      const AClientId: string;
+      const AClientSecret: string;
+      const APort: Word
+    );
+  end;
+
   { Manager orchestrating the OAuth 2.0 PKCE flow }
   TRadIAOAuthManager = class
   private
@@ -41,11 +56,7 @@ type
 
     procedure StartLogin(
       const AProvider: string;
-      const AAuthUrl: string;
-      const ATokenUrl: string;
-      const AClientId: string;
-      const AClientSecret: string;
-      const APort: Word;
+      const AParams: TRadIAOAuthParams;
       const AOnSuccess: TProc;
       const AOnError: TProc<string>
     );
@@ -67,6 +78,18 @@ uses
   System.Classes, System.Hash, System.NetEncoding, System.JSON,
   System.DateUtils, Winapi.ShellAPI, Winapi.Windows, RadIA.Core.Logger,
   RadIA.Core.Container, RadIA.Core.HttpClient, System.Net.URLClient;
+
+{ TRadIAOAuthParams }
+
+constructor TRadIAOAuthParams.Create(const AAuthUrl, ATokenUrl, AClientId, AClientSecret: string;
+  const APort: Word);
+begin
+  AuthUrl := AAuthUrl;
+  TokenUrl := ATokenUrl;
+  ClientId := AClientId;
+  ClientSecret := AClientSecret;
+  Port := APort;
+end;
 
 { TRadIAOAuthManager }
 
@@ -138,25 +161,21 @@ end;
 
 procedure TRadIAOAuthManager.StartLogin(
   const AProvider: string;
-  const AAuthUrl: string;
-  const ATokenUrl: string;
-  const AClientId: string;
-  const AClientSecret: string;
-  const APort: Word;
+  const AParams: TRadIAOAuthParams;
   const AOnSuccess: TProc;
   const AOnError: TProc<string>
-) ;
+);
 var
   LFullAuthUrl: string;
 begin
   CancelLogin;
 
   FProviderName := AProvider;
-  FAuthUrl := AAuthUrl;
-  FTokenUrl := ATokenUrl;
-  FClientId := AClientId;
-  FClientSecret := AClientSecret;
-  FPort := APort;
+  FAuthUrl := AParams.AuthUrl;
+  FTokenUrl := AParams.TokenUrl;
+  FClientId := AParams.ClientId;
+  FClientSecret := AParams.ClientSecret;
+  FPort := AParams.Port;
   FOnSuccess := AOnSuccess;
   FOnError := AOnError;
 

@@ -130,7 +130,7 @@ implementation
 
 uses
   System.Classes, System.SysUtils, RadIA.Core.Config, RadIA.Core.Container,
-  RadIA.Core.IndyLoopback, RadIA.Core.OAuth, System.NetEncoding, System.StrUtils;
+  RadIA.Core.IndyLoopback, RadIA.Core.OAuth, System.StrUtils;
 
 { TRadIAConfigPresenter }
 
@@ -679,11 +679,13 @@ begin
   try
     TRadIAOAuthManager(FOAuthManager).StartLogin(
       AProviderName,
-      LAuthUrl,
-      LTokenUrl,
-      LClientId,
-      LClientSecret,
-      LPort,
+      TRadIAOAuthParams.Create(
+        LAuthUrl,
+        LTokenUrl,
+        LClientId,
+        LClientSecret,
+        LPort
+      ),
       procedure
       begin
         TThread.Queue(nil,

@@ -214,11 +214,13 @@ begin
 
   FManager.StartLogin(
     'OpenAI',
-    'https://auth.openai.com/oauth/authorize',
-    'https://auth.openai.com/oauth/token',
-    'radia-delphi-plugin',
-    '',
-    59182,
+    TRadIAOAuthParams.Create(
+      'https://auth.openai.com/oauth/authorize',
+      'https://auth.openai.com/oauth/token',
+      'radia-delphi-plugin',
+      '',
+      59182
+    ),
     nil,
     nil
   );
@@ -244,11 +246,13 @@ begin
 
   FManager.StartLogin(
     'OpenAI',
-    'https://auth.openai.com/oauth/authorize',
-    'https://auth.openai.com/oauth/token',
-    'radia-delphi-plugin',
-    '',
-    59182,
+    TRadIAOAuthParams.Create(
+      'https://auth.openai.com/oauth/authorize',
+      'https://auth.openai.com/oauth/token',
+      'radia-delphi-plugin',
+      '',
+      59182
+    ),
     procedure
     begin
       LSuccessCalled := True;
@@ -273,11 +277,13 @@ procedure TTestRadIAOAuth.TestCancelLoginStopsServer;
 begin
   FManager.StartLogin(
     'OpenAI',
-    'https://auth.openai.com/oauth/authorize',
-    'https://auth.openai.com/oauth/token',
-    'radia-delphi-plugin',
-    '',
-    59182,
+    TRadIAOAuthParams.Create(
+      'https://auth.openai.com/oauth/authorize',
+      'https://auth.openai.com/oauth/token',
+      'radia-delphi-plugin',
+      '',
+      59182
+    ),
     nil,
     nil
   );
@@ -302,11 +308,13 @@ begin
 
   FManager.StartLogin(
     'OpenAI',
-    'https://auth.openai.com/oauth/authorize',
-    'https://auth.openai.com/oauth/token',
-    'radia-delphi-plugin',
-    '',
-    59182,
+    TRadIAOAuthParams.Create(
+      'https://auth.openai.com/oauth/authorize',
+      'https://auth.openai.com/oauth/token',
+      'radia-delphi-plugin',
+      '',
+      59182
+    ),
     procedure
     begin
       LSuccessCalled := True;
@@ -345,11 +353,13 @@ begin
 
   FManager.StartLogin(
     'OpenAI',
-    'https://auth.openai.com/oauth/authorize',
-    'https://auth.openai.com/oauth/token',
-    'radia-delphi-plugin',
-    '',
-    59182,
+    TRadIAOAuthParams.Create(
+      'https://auth.openai.com/oauth/authorize',
+      'https://auth.openai.com/oauth/token',
+      'radia-delphi-plugin',
+      '',
+      59182
+    ),
     procedure
     begin
       LSuccessCalled := True;
