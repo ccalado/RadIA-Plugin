@@ -935,7 +935,10 @@ var
 begin
   if not HasValidCredentials then
   begin
-    ACallback('', Format('Credentials (API Key or OAuth Token) are missing or invalid for %s. Please check settings.', [GetName]), False, TTokenUsage.Empty);
+    ACallback('',
+      Format('Credentials (API Key or OAuth Token) are missing or ' +
+      'invalid for %s. Please check settings.', [GetName]),
+      False, TTokenUsage.Empty);
     Exit;
   end;
 
@@ -969,7 +972,9 @@ var
 begin
   if not HasValidCredentials then
   begin
-    ACallback('', True, Format('Credentials (API Key or OAuth Token) are missing or invalid for %s. Please check settings.', [GetName]));
+    ACallback('', True,
+      Format('Credentials (API Key or OAuth Token) are missing or ' +
+      'invalid for %s. Please check settings.', [GetName]));
     Exit;
   end;
 

@@ -3,26 +3,16 @@ unit RadIA.Core.OAuth;
 interface
 
 uses
-  System.SysUtils, System.Classes, RadIA.Core.Interfaces;
+  System.SysUtils, RadIA.Core.Interfaces;
 
 type
-  { Callback function for loopback server events }
-  TLoopbackCallback = reference to procedure(const ACode: string; const AError: string);
-
-  { Interface defining the local loopback HTTP server for OAuth callbacks }
-  IRadIALoopbackServer = interface
-    ['{E27C9482-1D5B-4C6C-81AB-C096BA6277FF}']
-    procedure Start(const APort: Word; const ACallback: TLoopbackCallback);
-    procedure Stop;
-    function GetActivePort: Word;
-    function IsRunning: Boolean;
-  end;
 
   { Manager orchestrating the OAuth 2.0 PKCE flow }
   TRadIAOAuthManager = class
   private
     FConfig: IRadIAConfig;
     FLoopbackServer: IRadIALoopbackServer;
+    FHTTPClient: IRadIAHttpClient;
     FCodeVerifier: string;
     FCodeChallenge: string;
     FState: string;
@@ -36,11 +26,16 @@ type
     FOnError: TProc<string>;
     procedure HandleCallback(const ACode, AError: string);
     procedure ExchangeCodeForToken(const ACode: string);
+    function SaveTokenResponse(const AProvider: string; const AJsonStr: string): Boolean;
     class function GenerateRandomString(const ALength: Integer): string;
   protected
     procedure OpenBrowser(const AUrl: string); virtual;
   public
-    constructor Create(const AConfig: IRadIAConfig; const ALoopback: IRadIALoopbackServer);
+    constructor Create(
+      const AConfig: IRadIAConfig;
+      const ALoopback: IRadIALoopbackServer;
+      const AHTTPClient: IRadIAHttpClient = nil
+    );
     destructor Destroy; override;
 
     procedure StartLogin(
@@ -62,16 +57,25 @@ type
 implementation
 
 uses
-  System.Hash, System.NetEncoding, System.Net.HttpClient, System.JSON,
-  System.DateUtils, Winapi.ShellAPI, Winapi.Windows, RadIA.Core.Logger;
+  System.Classes, System.Hash, System.NetEncoding, System.JSON,
+  System.DateUtils, Winapi.ShellAPI, Winapi.Windows, RadIA.Core.Logger,
+  RadIA.Core.Container, RadIA.Core.HttpClient, System.Net.URLClient;
 
 { TRadIAOAuthManager }
 
-constructor TRadIAOAuthManager.Create(const AConfig: IRadIAConfig; const ALoopback: IRadIALoopbackServer);
+constructor TRadIAOAuthManager.Create(
+  const AConfig: IRadIAConfig;
+  const ALoopback: IRadIALoopbackServer;
+  const AHTTPClient: IRadIAHttpClient
+);
 begin
   inherited Create;
   FConfig := AConfig;
   FLoopbackServer := ALoopback;
+  if Assigned(AHTTPClient) then
+    FHTTPClient := AHTTPClient
+  else if not TRadIAContainer.TryResolve<IRadIAHttpClient>(FHTTPClient) then
+    FHTTPClient := TRadIAConcreteHttpClient.Create;
 end;
 
 destructor TRadIAOAuthManager.Destroy;
@@ -180,7 +184,8 @@ begin
 
   // For Gemini or scopes, you can append scope if needed
   if SameText(FProviderName, 'gemini') then
-    LFullAuthUrl := LFullAuthUrl + '&scope=' + TNetEncoding.URL.Encode('https://www.googleapis.com/auth/generative-language.tuning');
+    LFullAuthUrl := LFullAuthUrl + '&scope=' + TNetEncoding.URL.Encode(
+      'https://www.googleapis.com/auth/generative-language.tuning');
 
   TLogger.Log('Opening system browser: ' + LFullAuthUrl, 'OAuth');
   OpenBrowser(LFullAuthUrl);
@@ -218,95 +223,91 @@ begin
     end).Start;
 end;
 
-procedure TRadIAOAuthManager.ExchangeCodeForToken(const ACode: string);
+function TRadIAOAuthManager.SaveTokenResponse(const AProvider: string; const AJsonStr: string): Boolean;
 var
-  LClient: THTTPClient;
-  LParams: TStringList;
-  LResponse: IHTTPResponse;
   LJSON: TJSONObject;
   LAccessToken: string;
   LRefreshToken: string;
   LExpiresIn: Integer;
 begin
-  LClient := THTTPClient.Create;
-  LParams := TStringList.Create;
+  Result := False;
+  LJSON := TJSONObject.ParseJSONValue(AJsonStr) as TJSONObject;
+  if not Assigned(LJSON) then
+    Exit;
   try
-    LParams.AddPair('client_id', FClientId);
-    LParams.AddPair('grant_type', 'authorization_code');
-    LParams.AddPair('code', ACode);
-    LParams.AddPair('redirect_uri', FRedirectUri);
-    LParams.AddPair('code_verifier', FCodeVerifier);
+    LAccessToken := LJSON.GetValue<string>('access_token', '');
+    LRefreshToken := LJSON.GetValue<string>('refresh_token', '');
+    LExpiresIn := LJSON.GetValue<Integer>('expires_in', 0);
 
-    try
-      LResponse := LClient.Post(FTokenUrl, LParams);
-      TLogger.Log('Token exchange response code: ' + LResponse.StatusCode.ToString, 'OAuth');
+    if LAccessToken.IsEmpty then
+      Exit;
 
-      if LResponse.StatusCode = 200 then
-      begin
-        LJSON := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
-        if Assigned(LJSON) then
-        begin
-          try
-            LAccessToken := LJSON.GetValue<string>('access_token', '');
-            LRefreshToken := LJSON.GetValue<string>('refresh_token', '');
-            LExpiresIn := LJSON.GetValue<Integer>('expires_in', 0);
+    FConfig.SetOAuthAccessToken(AProvider, LAccessToken);
+    if not LRefreshToken.IsEmpty then
+      FConfig.SetOAuthRefreshToken(AProvider, LRefreshToken);
 
-            if LAccessToken.IsEmpty then
-            begin
-              if Assigned(FOnError) then
-                FOnError('Token response did not contain access_token.');
-              Exit;
-            end;
+    if LExpiresIn > 0 then
+      FConfig.SetOAuthTokenExpiry(AProvider, IncSecond(Now, LExpiresIn))
+    else
+      FConfig.SetOAuthTokenExpiry(AProvider, 0);
 
-            FConfig.SetOAuthAccessToken(FProviderName, LAccessToken);
-            if not LRefreshToken.IsEmpty then
-              FConfig.SetOAuthRefreshToken(FProviderName, LRefreshToken);
-
-            if LExpiresIn > 0 then
-              FConfig.SetOAuthTokenExpiry(FProviderName, IncSecond(Now, LExpiresIn))
-            else
-              FConfig.SetOAuthTokenExpiry(FProviderName, 0);
-
-            FConfig.Save;
-
-            TLogger.Log('OAuth token exchange completed successfully.', 'OAuth');
-
-            if Assigned(FOnSuccess) then
-              FOnSuccess;
-          finally
-            LJSON.Free;
-          end;
-        end
-        else
-        begin
-          if Assigned(FOnError) then
-            FOnError('Failed to parse token response JSON.');
-        end;
-      end;
-    except
-      on E: Exception do
-      begin
-        TLogger.Log('Exception during token exchange: ' + E.Message, 'OAuth');
-        if Assigned(FOnError) then
-          FOnError('Token exchange failed: ' + E.Message);
-      end;
-    end;
+    FConfig.Save;
+    Result := True;
   finally
-    LParams.Free;
-    LClient.Free;
+    LJSON.Free;
+  end;
+end;
+
+procedure TRadIAOAuthManager.ExchangeCodeForToken(const ACode: string);
+var
+  LHeaders: TNetHeaders;
+  LRequestBody: string;
+  LResponseJson: string;
+begin
+  SetLength(LHeaders, 1);
+  LHeaders[0] := TNetHeader.Create('Content-Type', 'application/x-www-form-urlencoded');
+
+  LRequestBody := 'client_id=' + TNetEncoding.URL.Encode(FClientId) +
+                  '&grant_type=authorization_code' +
+                  '&code=' + TNetEncoding.URL.Encode(ACode) +
+                  '&redirect_uri=' + TNetEncoding.URL.Encode(FRedirectUri) +
+                  '&code_verifier=' + TNetEncoding.URL.Encode(FCodeVerifier);
+
+  try
+    LResponseJson := FHTTPClient.Post(FTokenUrl, LHeaders, LRequestBody);
+    if SaveTokenResponse(FProviderName, LResponseJson) then
+    begin
+      TLogger.Log('OAuth token exchange completed successfully.', 'OAuth');
+      if Assigned(FOnSuccess) then
+        FOnSuccess;
+    end
+    else
+    begin
+      if Assigned(FOnError) then
+        FOnError('Token response did not contain access_token.');
+    end;
+  except
+    on E: ERadIAHttpException do
+    begin
+      TLogger.Log(Format('HTTP Exception during token exchange: %d - %s', [E.StatusCode, E.Message]), 'OAuth');
+      if Assigned(FOnError) then
+        FOnError('Token exchange failed with HTTP error: ' + E.StatusCode.ToString);
+    end;
+    on E: Exception do
+    begin
+      TLogger.Log('Exception during token exchange: ' + E.Message, 'OAuth');
+      if Assigned(FOnError) then
+        FOnError('Token exchange failed: ' + E.Message);
+    end;
   end;
 end;
 
 function TRadIAOAuthManager.RefreshAccessToken(const AProvider: string; const ATokenUrl, AClientId: string): Boolean;
 var
-  LClient: THTTPClient;
-  LParams: TStringList;
-  LResponse: IHTTPResponse;
+  LHeaders: TNetHeaders;
+  LRequestBody: string;
   LRefreshToken: string;
-  LJSON: TJSONObject;
-  LAccessToken: string;
-  LNewRefreshToken: string;
-  LExpiresIn: Integer;
+  LResponseJson: string;
 begin
   Result := False;
   LRefreshToken := FConfig.GetOAuthRefreshToken(AProvider);
@@ -317,56 +318,23 @@ begin
   end;
 
   TLogger.Log('Refreshing access token for ' + AProvider, 'OAuth');
-  LClient := THTTPClient.Create;
-  LParams := TStringList.Create;
+  SetLength(LHeaders, 1);
+  LHeaders[0] := TNetHeader.Create('Content-Type', 'application/x-www-form-urlencoded');
+
+  LRequestBody := 'client_id=' + TNetEncoding.URL.Encode(AClientId) +
+                  '&grant_type=refresh_token' +
+                  '&refresh_token=' + TNetEncoding.URL.Encode(LRefreshToken);
+
   try
-    LParams.AddPair('client_id', AClientId);
-    LParams.AddPair('grant_type', 'refresh_token');
-    LParams.AddPair('refresh_token', LRefreshToken);
-
-    try
-      LResponse := LClient.Post(ATokenUrl, LParams);
-      TLogger.Log('Refresh token response code: ' + LResponse.StatusCode.ToString, 'OAuth');
-
-      if LResponse.StatusCode = 200 then
-      begin
-        LJSON := TJSONObject.ParseJSONValue(LResponse.ContentAsString) as TJSONObject;
-        if Assigned(LJSON) then
-        begin
-          try
-            LAccessToken := LJSON.GetValue<string>('access_token', '');
-            LNewRefreshToken := LJSON.GetValue<string>('refresh_token', '');
-            LExpiresIn := LJSON.GetValue<Integer>('expires_in', 0);
-
-            if not LAccessToken.IsEmpty then
-            begin
-              FConfig.SetOAuthAccessToken(AProvider, LAccessToken);
-              if not LNewRefreshToken.IsEmpty then
-                FConfig.SetOAuthRefreshToken(AProvider, LNewRefreshToken);
-
-              if LExpiresIn > 0 then
-                FConfig.SetOAuthTokenExpiry(AProvider, IncSecond(Now, LExpiresIn))
-              else
-                FConfig.SetOAuthTokenExpiry(AProvider, 0);
-
-              FConfig.Save;
-              Result := True;
-              TLogger.Log('OAuth token refresh completed successfully.', 'OAuth');
-            end;
-          finally
-            LJSON.Free;
-          end;
-        end;
-      end;
-    except
-      on E: Exception do
-      begin
-        TLogger.Log('Failed to refresh token: ' + E.Message, 'OAuth');
-      end;
+    LResponseJson := FHTTPClient.Post(ATokenUrl, LHeaders, LRequestBody);
+    Result := SaveTokenResponse(AProvider, LResponseJson);
+    if Result then
+      TLogger.Log('OAuth token refresh completed successfully.', 'OAuth');
+  except
+    on E: Exception do
+    begin
+      TLogger.Log('Failed to refresh token: ' + E.Message, 'OAuth');
     end;
-  finally
-    LParams.Free;
-    LClient.Free;
   end;
 end;
 

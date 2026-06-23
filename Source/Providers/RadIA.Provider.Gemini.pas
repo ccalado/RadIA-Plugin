@@ -35,7 +35,7 @@ implementation
 uses
   System.Classes, RadIA.Core.Types, System.JSON, System.Threading,
   System.Generics.Collections, System.NetEncoding, System.SyncObjs, System.Math,
-  RadIA.Core.Logger, RadIA.Core.ProviderRegistry, System.Net.URLClient, System.Net.HttpClient;
+  RadIA.Core.Logger, RadIA.Core.ProviderRegistry, System.Net.URLClient;
 
 { TRadIAGeminiProvider }
 
@@ -220,7 +220,10 @@ var
 begin
   if not HasValidCredentials then
   begin
-    ACallback('', 'Credentials (API Key or OAuth Token) are missing or invalid for Google Gemini. Please check settings.', False, TTokenUsage.Empty);
+    ACallback('',
+      'Credentials (API Key or OAuth Token) are missing or ' +
+      'invalid for Google Gemini. Please check settings.',
+      False, TTokenUsage.Empty);
     Exit;
   end;
 
@@ -325,7 +328,9 @@ begin
       TThread.Queue(nil,
         procedure
         begin
-          ACallback(GetAvailableModels, 'Credentials (API Key or OAuth Token) are missing or invalid for Google Gemini. Using fallback models.');
+          ACallback(GetAvailableModels,
+            'Credentials (API Key or OAuth Token) are missing or ' +
+            'invalid for Google Gemini. Using fallback models.');
         end);
     end;
     Exit;
@@ -340,7 +345,8 @@ begin
   else
   begin
     LApiKey := GetApiKey;
-    LUrl := Format('https://generativelanguage.googleapis.com/v1beta/models?key=%s', [TNetEncoding.URL.Encode(LApiKey)]);
+    LUrl := Format('https://generativelanguage.googleapis.com/v1beta/models?key=%s',
+      [TNetEncoding.URL.Encode(LApiKey)]);
     LHeaders := nil;
   end;
 
@@ -539,7 +545,9 @@ var
 begin
   if not HasValidCredentials then
   begin
-    ACallback('', True, 'Credentials (API Key or OAuth Token) are missing or invalid for Google Gemini. Please check settings.');
+    ACallback('', True,
+      'Credentials (API Key or OAuth Token) are missing or ' +
+      'invalid for Google Gemini. Please check settings.');
     Exit;
   end;
 

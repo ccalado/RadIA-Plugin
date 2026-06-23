@@ -88,6 +88,7 @@ uses
   RadIA.Tests.Container in 'Source\RadIA.Tests.Container.pas',
   RadIA.Tests.Infrastructure in 'Source\RadIA.Tests.Infrastructure.pas',
   RadIA.Tests.OAuth in 'Source\RadIA.Tests.OAuth.pas',
+  RadIA.Tests.IndyLoopback in 'Source\RadIA.Tests.IndyLoopback.pas',
   RadIA.Tests.TextNormalizer in 'Source\RadIA.Tests.TextNormalizer.pas',
   RadIA.Tests.AwsSigner in 'Source\RadIA.Tests.AwsSigner.pas',
   RadIA.Tests.Mediator in 'Source\RadIA.Tests.Mediator.pas',

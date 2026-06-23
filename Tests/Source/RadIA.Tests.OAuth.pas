@@ -4,9 +4,36 @@ interface
 
 uses
   DUnitX.TestFramework, RadIA.Core.Interfaces, RadIA.Core.OAuth,
-  RadIA.Core.SettingsStorage;
+  RadIA.Core.SettingsStorage, System.Net.URLClient, System.SysUtils;
 
 type
+  TMockOAuthHttpClient = class(TInterfacedObject, IRadIAHttpClient)
+  private
+    FResponse: string;
+    FErrorStatusCode: Integer;
+    FErrorContent: string;
+  public
+    constructor Create(const AResponse: string = '');
+    function Get(const AUrl: string; const AHeaders: TNetHeaders; const ATimeoutMs: Integer = 0): string;
+    function Post(
+      const AUrl: string;
+      const AHeaders: TNetHeaders;
+      const ARequestBody: string;
+      const ATimeoutMs: Integer = 0
+    ): string;
+    procedure PostStream(
+      const AUrl: string;
+      const AHeaders: TNetHeaders;
+      const ARequestBody: string;
+      const AOnWrite: TProc<TBytes>;
+      const ATimeoutMs: Integer = 0
+    );
+    procedure Cancel;
+    procedure SetErrorResponse(const AStatusCode: Integer; const AContent: string);
+
+    property Response: string read FResponse write FResponse;
+  end;
+
   TMockLoopbackServer = class(TInterfacedObject, IRadIALoopbackServer)
   private
     FRunning: Boolean;
@@ -36,6 +63,7 @@ type
     FConfig: IRadIAConfig;
     FStorage: IRadIASettingsStorage;
     FMockServer: TMockLoopbackServer;
+    FMockHttpClient: TMockOAuthHttpClient;
     FManager: TTestableOAuthManager;
   public
     [Setup]
@@ -50,13 +78,67 @@ type
     [Test]
     procedure TestHandleCallbackWithError;
     [Test]
+    procedure TestHandleCallbackWithSuccess;
+    [Test]
+    procedure TestHandleCallbackWithExchangeError;
+    [Test]
     procedure TestCancelLoginStopsServer;
+    [Test]
+    procedure TestRefreshAccessTokenSuccess;
   end;
 
 implementation
 
 uses
-  System.SysUtils, RadIA.Core.Config;
+  RadIA.Core.Config;
+
+{ TMockOAuthHttpClient }
+
+constructor TMockOAuthHttpClient.Create(const AResponse: string);
+begin
+  inherited Create;
+  FResponse := AResponse;
+  FErrorStatusCode := 0;
+end;
+
+function TMockOAuthHttpClient.Get(const AUrl: string; const AHeaders: TNetHeaders; const ATimeoutMs: Integer): string;
+begin
+  Result := '';
+end;
+
+function TMockOAuthHttpClient.Post(
+  const AUrl: string;
+  const AHeaders: TNetHeaders;
+  const ARequestBody: string;
+  const ATimeoutMs: Integer
+): string;
+begin
+  if FErrorStatusCode <> 0 then
+    raise ERadIAHttpException.Create(FErrorContent, FErrorStatusCode, FErrorContent);
+  Result := FResponse;
+end;
+
+procedure TMockOAuthHttpClient.PostStream(
+  const AUrl: string;
+  const AHeaders: TNetHeaders;
+  const ARequestBody: string;
+  const AOnWrite: TProc<TBytes>;
+  const ATimeoutMs: Integer
+);
+begin
+  if True then ;
+end;
+
+procedure TMockOAuthHttpClient.Cancel;
+begin
+  if True then ;
+end;
+
+procedure TMockOAuthHttpClient.SetErrorResponse(const AStatusCode: Integer; const AContent: string);
+begin
+  FErrorStatusCode := AStatusCode;
+  FErrorContent := AContent;
+end;
 
 { TMockLoopbackServer }
 
@@ -99,8 +181,9 @@ begin
   FConfig := TRadIAConfig.Create;
   FConfig.Load;
 
+  FMockHttpClient := TMockOAuthHttpClient.Create;
   FMockServer := TMockLoopbackServer.Create;
-  FManager := TTestableOAuthManager.Create(FConfig, FMockServer);
+  FManager := TTestableOAuthManager.Create(FConfig, FMockServer, FMockHttpClient);
 end;
 
 procedure TTestRadIAOAuth.TearDown;
@@ -140,7 +223,7 @@ begin
   );
 
   Assert.IsTrue(FMockServer.IsRunning);
-  Assert.AreEqual(Word(59182), FMockServer.GetActivePort);
+  Assert.AreEqual(59182, FMockServer.GetActivePort);
   Assert.IsNotEmpty(FManager.LastOpenedUrl);
   Assert.IsTrue(FManager.LastOpenedUrl.Contains('https://auth.openai.com/oauth/authorize'));
   Assert.IsTrue(FManager.LastOpenedUrl.Contains('client_id=radia-delphi-plugin'));
@@ -201,6 +284,107 @@ begin
   FManager.CancelLogin;
 
   Assert.IsFalse(FMockServer.IsRunning);
+end;
+
+procedure TTestRadIAOAuth.TestHandleCallbackWithSuccess;
+var
+  LSuccessCalled: Boolean;
+  LErrorMsg: string;
+begin
+  LSuccessCalled := False;
+  LErrorMsg := '';
+
+  FMockHttpClient.Response := '{"access_token":"test-access-token",' +
+    '"refresh_token":"test-refresh-token","expires_in":3600}';
+
+  FManager.StartLogin(
+    'OpenAI',
+    'https://auth.openai.com/oauth/authorize',
+    'https://auth.openai.com/oauth/token',
+    'radia-delphi-plugin',
+    59182,
+    procedure
+    begin
+      LSuccessCalled := True;
+    end,
+    procedure(AError: string)
+    begin
+      LErrorMsg := AError;
+    end
+  );
+
+  Assert.IsTrue(FMockServer.IsRunning);
+  Assert.IsTrue(Assigned(FMockServer.Callback));
+
+  FMockServer.Callback('auth-code-123', '');
+
+  // Sleep breve para aguardar processamento do thread anonimo assincrono
+  Sleep(100);
+
+  Assert.IsTrue(LSuccessCalled, 'OnSuccess callback should have been called.');
+  Assert.IsEmpty(LErrorMsg, 'OnError should not be called.');
+
+  Assert.AreEqual('test-access-token', FConfig.GetOAuthAccessToken('OpenAI'));
+  Assert.AreEqual('test-refresh-token', FConfig.GetOAuthRefreshToken('OpenAI'));
+  Assert.IsFalse(FMockServer.IsRunning);
+end;
+
+procedure TTestRadIAOAuth.TestHandleCallbackWithExchangeError;
+var
+  LSuccessCalled: Boolean;
+  LErrorMsg: string;
+begin
+  LSuccessCalled := False;
+  LErrorMsg := '';
+
+  FMockHttpClient.SetErrorResponse(400, 'Invalid code');
+
+  FManager.StartLogin(
+    'OpenAI',
+    'https://auth.openai.com/oauth/authorize',
+    'https://auth.openai.com/oauth/token',
+    'radia-delphi-plugin',
+    59182,
+    procedure
+    begin
+      LSuccessCalled := True;
+    end,
+    procedure(AError: string)
+    begin
+      LErrorMsg := AError;
+    end
+  );
+
+  FMockServer.Callback('invalid-code-123', '');
+
+  Sleep(100);
+
+  Assert.IsFalse(LSuccessCalled);
+  Assert.IsTrue(
+    LErrorMsg.Contains('400') or LErrorMsg.Contains('failed'),
+    'OnError should contain HTTP error status or fail message.'
+  );
+end;
+
+procedure TTestRadIAOAuth.TestRefreshAccessTokenSuccess;
+var
+  LSuccess: Boolean;
+begin
+  FConfig.SetOAuthRefreshToken('OpenAI', 'old-refresh');
+  FConfig.Save;
+
+  FMockHttpClient.Response := '{"access_token":"new-access-token",' +
+    '"refresh_token":"new-refresh-token","expires_in":1800}';
+
+  LSuccess := FManager.RefreshAccessToken(
+    'OpenAI',
+    'https://auth.openai.com/oauth/token',
+    'radia-delphi-plugin'
+  );
+
+  Assert.IsTrue(LSuccess, 'RefreshAccessToken should return True.');
+  Assert.AreEqual('new-access-token', FConfig.GetOAuthAccessToken('OpenAI'));
+  Assert.AreEqual('new-refresh-token', FConfig.GetOAuthRefreshToken('OpenAI'));
 end;
 
 initialization

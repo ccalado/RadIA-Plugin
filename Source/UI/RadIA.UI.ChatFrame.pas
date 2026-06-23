@@ -1103,13 +1103,13 @@ end;
 
 procedure TRadIAFrameAIChat.EdgeBrowserWebSourceChanged(Sender: TCustomEdgeBrowser; IsNewDocument: Boolean);
 begin
-  // Web Login is deprecated
+  if True then ; // Web Login is deprecated
 end;
 
 procedure TRadIAFrameAIChat.EdgeBrowserWebWebMessageReceived(Sender: TCustomEdgeBrowser;
     Args: TWebMessageReceivedEventArgs);
 begin
-  // Web Login is deprecated
+  if True then ; // Web Login is deprecated
 end;
 
 end.

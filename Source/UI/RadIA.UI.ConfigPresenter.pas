@@ -3,8 +3,7 @@ unit RadIA.UI.ConfigPresenter;
 interface
 
 uses
-  System.Classes, System.SysUtils, Vcl.Graphics, RadIA.Core.Interfaces, RadIA.Core.PromptTemplates,
-  RadIA.Core.OAuth;
+  Vcl.Graphics, RadIA.Core.Interfaces, RadIA.Core.PromptTemplates;
 
 type
   IRadIAConfigView = interface
@@ -91,7 +90,7 @@ type
     FTemplateManager: TPromptTemplateManager;
     FOwnsTemplateManager: Boolean;
     FProvidersList: TArray<string>;
-    FOAuthManager: TRadIAOAuthManager;
+    FOAuthManager: TObject;
 
     function ValidateUrl(const AUrl: string; const AFieldName: string): Boolean;
     function ValidateUrls(const AOllamaUrl, AOpenAIUrl, ALMStudioUrl, AAzureUrl: string): Boolean;
@@ -130,8 +129,8 @@ type
 implementation
 
 uses
-  RadIA.Core.Config, RadIA.Core.Container,
-  RadIA.Core.IndyLoopback;
+  System.Classes, System.SysUtils, RadIA.Core.Config, RadIA.Core.Container,
+  RadIA.Core.IndyLoopback, RadIA.Core.OAuth;
 
 { TRadIAConfigPresenter }
 
@@ -169,8 +168,7 @@ destructor TRadIAConfigPresenter.Destroy;
 begin
   if FOwnsTemplateManager then
     FTemplateManager.Free;
-  if Assigned(FOAuthManager) then
-    FOAuthManager.Free;
+  FOAuthManager.Free;
   inherited Destroy;
 end;
 
@@ -194,7 +192,8 @@ var
 begin
   LFormatSettings := TFormatSettings.Invariant;
 
-  if SameText(FConfig.GetProviderAuthType('Gemini'), 'oauth') or SameText(FConfig.GetProviderAuthType('Gemini'), 'web_login') then
+  if SameText(FConfig.GetProviderAuthType('Gemini'), 'oauth') or
+     SameText(FConfig.GetProviderAuthType('Gemini'), 'web_login') then
   begin
     FView.SetAuthTypeIndex('Gemini', 1);
     FView.UpdateOAuthState('Gemini', not FConfig.GetOAuthAccessToken('Gemini').IsEmpty);
@@ -205,7 +204,8 @@ begin
     FView.UpdateOAuthState('Gemini', False);
   end;
 
-  if SameText(FConfig.GetProviderAuthType('OpenAI'), 'oauth') or SameText(FConfig.GetProviderAuthType('OpenAI'), 'web_login') then
+  if SameText(FConfig.GetProviderAuthType('OpenAI'), 'oauth') or
+     SameText(FConfig.GetProviderAuthType('OpenAI'), 'web_login') then
   begin
     FView.SetAuthTypeIndex('OpenAI', 1);
     FView.UpdateOAuthState('OpenAI', not FConfig.GetOAuthAccessToken('OpenAI').IsEmpty);
@@ -674,7 +674,7 @@ begin
 
   try
     FView.ShowMessageDialog('Please complete login in the opened browser window...');
-    FOAuthManager.StartLogin(
+    TRadIAOAuthManager(FOAuthManager).StartLogin(
       AProviderName,
       LAuthUrl,
       LTokenUrl,

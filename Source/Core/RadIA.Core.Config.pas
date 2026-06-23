@@ -56,6 +56,8 @@ type
     procedure LoadApiKey(const AProviderName: string);
     procedure LoadBaseUrl(const AProviderName: string);
     procedure LoadNumericSettings(const AProviderName: string);
+    procedure LoadOAuthSettings(const AProviderName: string);
+    procedure LoadModelSettings(const AProviderName: string);
     procedure LoadProviderSettings(const AProviderPath, AProviderName: string);
     procedure LoadFromPath(const APath: string);
     procedure SaveToPath(const APath: string);
@@ -453,51 +455,58 @@ begin
   end;
 end;
 
+procedure TRadIAConfig.LoadModelSettings(const AProviderName: string);
+begin
+  if FStorage.ValueExists('Model') then
+    FModelsList.Values[AProviderName.ToLower] := FStorage.ReadString('Model', '')
+  else if FStorage.ValueExists('ActiveModel') then
+    FModelsList.Values[AProviderName.ToLower] := FStorage.ReadString('ActiveModel', '');
+end;
+
+procedure TRadIAConfig.LoadOAuthSettings(const AProviderName: string);
+begin
+  if FStorage.ValueExists('OAuthAccessToken') then
+  begin
+    try
+      FOAuthAccessTokensList.Values[AProviderName.ToLower] := UnprotectString(
+        FStorage.ReadString('OAuthAccessToken', '')
+      );
+    except
+      on E: Exception do
+        LogDebug('Failed to unprotect OAuthAccessToken for ' + AProviderName + ': ' + E.Message);
+    end;
+  end;
+
+  if FStorage.ValueExists('OAuthRefreshToken') then
+  begin
+    try
+      FOAuthRefreshTokensList.Values[AProviderName.ToLower] := UnprotectString(
+        FStorage.ReadString('OAuthRefreshToken', '')
+      );
+    except
+      on E: Exception do
+        LogDebug('Failed to unprotect OAuthRefreshToken for ' + AProviderName + ': ' + E.Message);
+    end;
+  end;
+
+  if FStorage.ValueExists('OAuthTokenExpiry') then
+  begin
+    FOAuthTokenExpirationsList.Values[AProviderName.ToLower] := FloatToStr(
+      FStorage.ReadFloat('OAuthTokenExpiry', 0),
+      TFormatSettings.Invariant
+    );
+  end;
+end;
+
 procedure TRadIAConfig.LoadProviderSettings(const AProviderPath, AProviderName: string);
 begin
   LogDebug('TRadIAConfig.Load: Reading subkey for provider ' + AProviderName);
   if FStorage.OpenKey(AProviderPath, False) then
   begin
     LoadApiKey(AProviderName);
-
-    if FStorage.ValueExists('Model') then
-      FModelsList.Values[AProviderName.ToLower] := FStorage.ReadString('Model', '')
-    else if FStorage.ValueExists('ActiveModel') then
-      FModelsList.Values[AProviderName.ToLower] := FStorage.ReadString('ActiveModel', '');
-
+    LoadModelSettings(AProviderName);
     LoadBaseUrl(AProviderName);
-
-    if FStorage.ValueExists('OAuthAccessToken') then
-    begin
-      try
-        FOAuthAccessTokensList.Values[AProviderName.ToLower] := UnprotectString(
-          FStorage.ReadString('OAuthAccessToken', '')
-        );
-      except
-        on E: Exception do
-          LogDebug('Failed to unprotect OAuthAccessToken for ' + AProviderName + ': ' + E.Message);
-      end;
-    end;
-
-    if FStorage.ValueExists('OAuthRefreshToken') then
-    begin
-      try
-        FOAuthRefreshTokensList.Values[AProviderName.ToLower] := UnprotectString(
-          FStorage.ReadString('OAuthRefreshToken', '')
-        );
-      except
-        on E: Exception do
-          LogDebug('Failed to unprotect OAuthRefreshToken for ' + AProviderName + ': ' + E.Message);
-      end;
-    end;
-
-    if FStorage.ValueExists('OAuthTokenExpiry') then
-    begin
-      FOAuthTokenExpirationsList.Values[AProviderName.ToLower] := FloatToStr(
-        FStorage.ReadFloat('OAuthTokenExpiry', 0),
-        TFormatSettings.Invariant
-      );
-    end;
+    LoadOAuthSettings(AProviderName);
 
     if SameText(AProviderName, 'AzureOpenAI') then
       FAzureApiVersion := ReadRegString('ApiVersion', TConfigDefaults.AzureApiVersion);

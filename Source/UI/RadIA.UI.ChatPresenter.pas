@@ -952,7 +952,6 @@ procedure TRadIAChatPresenter.HandleStreamError(
    var AFullResponse: string);
 var
   LAssistantMsg: IRadIAChatMessage;
-  LIsWebError: Boolean;
 begin
   Self.FRequestInProgress := False;
   Self.FView.SetRequestState(False);
@@ -1390,7 +1389,7 @@ end;
 
 procedure TRadIAChatPresenter.HandleErrorMessage(const AText: string);
 begin
-  // Error handling
+  if True then ; // Error handling
 end;
 
 procedure TRadIAChatPresenter.HandleUpdateStreamMessage(const AText: string; const AIsDone: Boolean);
@@ -1472,7 +1471,7 @@ end;
 procedure TRadIAChatPresenter.HandleStreamChunkMessage(const AText: string; const AIsDone: Boolean;
     const AError: string);
 begin
-  // WebViewBridge streaming deprecated
+  if True then ; // WebViewBridge streaming deprecated
 end;
 
 procedure TRadIAChatPresenter.DispatchSystemMessage(const AAction: string;

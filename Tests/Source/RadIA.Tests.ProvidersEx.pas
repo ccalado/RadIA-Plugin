@@ -63,14 +63,9 @@ type
     FGeminiProvRef: IRadIAProvider;
     FClaudeProvRef: IRadIAProvider;
     FOllamaProvRef: IRadIAProvider;
-    FMockSendPromptCalled: Boolean;
-    FMockCancelCalled: Boolean;
-    FMockPromptReceived: string;
     FMockHttpClient: TMockHttpClient;
     FUsageResult: TTokenUsage;
 
-    procedure MockSendPromptEvent(const APrompt: string);
-    procedure MockCancelEvent;
     procedure RunProviderSendPromptAsyncTest(AProvider: IRadIAProvider; const AProviderId: string;
       const AMockResponse: string; const AExpectedResponse: string);
     procedure RunProviderSendPromptStreamAsyncTest(AProvider: IRadIAProvider; const AProviderId: string;
@@ -841,17 +836,6 @@ begin
     'data: {"choices":[{"delta":{"content":" Copilot"}}]}' + #10 +
     'data: [DONE]' + #10,
     'Github Copilot', 3);
-end;
-
-procedure TTestRadIAProvidersEx.MockSendPromptEvent(const APrompt: string);
-begin
-  FMockSendPromptCalled := True;
-  FMockPromptReceived := APrompt;
-end;
-
-procedure TTestRadIAProvidersEx.MockCancelEvent;
-begin
-  FMockCancelCalled := True;
 end;
 
 procedure TTestRadIAProvidersEx.RunProviderSendPromptAsyncTest(AProvider: IRadIAProvider;

@@ -563,14 +563,14 @@ begin
 
   FPresenter.LoadConfig;
   Assert.IsTrue(FMockView.OAuthLoggedInMap.ContainsKey('gemini'));
-  Assert.IsTrue(FMockView.OAuthLoggedInMap.Items['gemini']);
+  Assert.IsTrue(FMockView.OAuthLoggedInMap['gemini']);
 
   FPresenter.PerformOAuthLogoff('Gemini');
 
   Assert.IsEmpty(FConfig.GetOAuthAccessToken('Gemini'));
   Assert.IsEmpty(FConfig.GetOAuthRefreshToken('Gemini'));
   Assert.AreEqual('api_key', FConfig.GetProviderAuthType('Gemini'));
-  Assert.IsFalse(FMockView.OAuthLoggedInMap.Items['gemini']);
+  Assert.IsFalse(FMockView.OAuthLoggedInMap['gemini']);
 end;
 
 initialization

@@ -46,6 +46,19 @@ type
     const AIsDone: Boolean;
     const AError: string);
 
+  { Callback function for loopback server events }
+  TLoopbackCallback = reference to procedure(const ACode: string; const AError: string);
+
+  { Interface defining the local loopback HTTP server for OAuth callbacks }
+  IRadIALoopbackServer = interface
+    ['{E27C9482-1D5B-4C6C-81AB-C096BA6277FF}']
+    procedure Start(const APort: Word; const ACallback: TLoopbackCallback);
+    procedure Stop;
+    function GetActivePort: Word;
+    function IsRunning: Boolean;
+  end;
+
+
   { Interface representing a message in the chat history }
   IRadIAChatMessage = interface
     ['{69A8A5DC-0F88-46E1-AD7A-8A46101EA97D}']
