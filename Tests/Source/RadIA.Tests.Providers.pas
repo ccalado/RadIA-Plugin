@@ -49,6 +49,8 @@ type
     procedure TestOpenAI_CustomBaseUrl_ReplacesDefault;
     [Test]
     procedure TestOpenAI_CustomBaseUrl_TrailingSlashRemoved;
+    [Test]
+    procedure TestOpenAI_BaseUrl_ReturnsOfficial_WhenOAuth_EvenWithCustomUrl;
   end;
 
 implementation
@@ -373,6 +375,33 @@ begin
     LExpectedChatUrl := LConfig.GetOpenAICustomBaseUrl.TrimRight(['/']) + EXPECTED_CHAT_PATH;
     Assert.AreEqual('http://localhost:1234/v1' + EXPECTED_CHAT_PATH, LExpectedChatUrl,
       'Trailing slash must be stripped before appending path to avoid double slash');
+  finally
+    LConfig := nil;
+  end;
+end;
+
+procedure TTestOpenAICustomUrl.TestOpenAI_BaseUrl_ReturnsOfficial_WhenOAuth_EvenWithCustomUrl;
+var
+  LConfig: IRadIAConfig;
+  LProvider: TRadIAOpenAIProvider;
+  LReflect: TRttiContext;
+  LMethod: TRttiMethod;
+  LUrl: string;
+begin
+  LConfig := TMockConfig.Create(20);
+  try
+    LConfig.SetProviderAuthType('OpenAI', 'oauth');
+    LConfig.OpenAICustomBaseUrl := 'http://localhost:1234/v1';
+    LProvider := TRadIAOpenAIProvider.Create(LConfig);
+    try
+      LReflect := TRttiContext.Create;
+      LMethod := LReflect.GetType(TRadIAOpenAIProvider).GetMethod('GetBaseUrl');
+      LUrl := LMethod.Invoke(LProvider, []).AsString;
+      Assert.AreEqual('https://api.openai.com/v1', LUrl,
+        'Base URL must always be the official OpenAI endpoint in OAuth mode, ignoring any custom URLs');
+    finally
+      LProvider.Free;
+    end;
   finally
     LConfig := nil;
   end;

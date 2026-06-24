@@ -35,7 +35,9 @@ end;
 
 function TRadIAOpenAIProvider.GetBaseUrl: string;
 begin
-  if not FConfig.GetOpenAICustomBaseUrl.IsEmpty then
+  if SameText(FConfig.GetProviderAuthType(FProviderId), 'oauth') then
+    Result := 'https://api.openai.com/v1'
+  else if not FConfig.GetOpenAICustomBaseUrl.IsEmpty then
     Result := FConfig.GetOpenAICustomBaseUrl
   else
     Result := 'https://api.openai.com/v1';

@@ -26,6 +26,7 @@ type
     FOAuthAccessTokens: TDictionary<string, string>;
     FOAuthRefreshTokens: TDictionary<string, string>;
     FOAuthTokenExpirations: TDictionary<string, TDateTime>;
+    FAuthTypes: TDictionary<string, string>;
     FSmartConfigEnabled: Boolean;
     FLogEnabled: Boolean;
     FLogPath: string;
@@ -282,6 +283,7 @@ begin
   FOAuthAccessTokens := TDictionary<string, string>.Create;
   FOAuthRefreshTokens := TDictionary<string, string>.Create;
   FOAuthTokenExpirations := TDictionary<string, TDateTime>.Create;
+  FAuthTypes := TDictionary<string, string>.Create;
 
   FQuotaEnabled := False;
   FQuotaLimit := 1000000;
@@ -308,6 +310,7 @@ begin
   FOAuthAccessTokens.Free;
   FOAuthRefreshTokens.Free;
   FOAuthTokenExpirations.Free;
+  FAuthTypes.Free;
   inherited Destroy;
 end;
 
@@ -660,13 +663,13 @@ end;
 
 function TMockConfig.GetProviderAuthType(const AProviderName: string): string;
 begin
-  Result := 'api_key';
+  if not FAuthTypes.TryGetValue(AProviderName.ToLower, Result) then
+    Result := 'api_key';
 end;
 
 procedure TMockConfig.SetProviderAuthType(const AProviderName: string; const AValue: string);
 begin
-  // Added harmless statement to satisfy SonarQube EmptyRoutine and RedundantJump rules in Delphi mock
-  if True then ;
+  FAuthTypes.AddOrSetValue(AProviderName.ToLower, AValue);
 end;
 
 function TMockConfig.IsWebLoginProvider(const AProviderName: string): Boolean;
