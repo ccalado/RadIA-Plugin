@@ -1,4 +1,4 @@
-unit RadIA.Provider.Base;
+﻿unit RadIA.Provider.Base;
 
 interface
 
@@ -25,6 +25,7 @@ type
     function GetOAuthClientId: string; virtual;
     function GetOAuthClientSecret: string; virtual;
     function HasValidCredentials: Boolean; virtual;
+    function GetAuthorizationHeader: string; virtual;
 
     function GetApiKey: string;
     function GetActiveModel: string;
@@ -81,7 +82,7 @@ type
   TRadIAOpenAICompatibleProvider = class(TRadIAProviderBase)
   protected
     function GetBaseUrl: string; virtual; abstract;
-    function GetAuthorizationHeader: string; virtual;
+    function GetAuthorizationHeader: string; override;
   public
     procedure SendPromptAsync(const APrompt: string; const AHistory: TArray<IRadIAChatMessage>;
       const ACallback: TCompletionCallback; const ATemperature: Double; const AMaxTokens: Integer); override;
@@ -785,7 +786,6 @@ procedure TRadIAProviderBase.FetchAvailableModelsAsync(
   const ACallback: TProc<TArray<string>, string>);
 var
   LUrl: string;
-  LApiKey: string;
   LHeaders: TNetHeaders;
   LTaskProc: TProc;
   LProviderRef: IRadIAProvider;
@@ -820,15 +820,14 @@ begin
     Exit;
   end;
 
-  LApiKey := GetApiKey;
-  if LApiKey.IsEmpty then
+  if not HasValidCredentials then
   begin
-    FallbackToDefaultModels(Format('API Key is missing for %s. Using fallback models.', [GetName]));
+    FallbackToDefaultModels(Format('Credentials (API Key or OAuth Token) are missing or invalid for %s. Using fallback models.', [GetName]));
     Exit;
   end;
 
   SetLength(LHeaders, 1);
-  LHeaders[0] := TNetHeader.Create('Authorization', 'Bearer ' + LApiKey);
+  LHeaders[0] := TNetHeader.Create('Authorization', GetAuthorizationHeader);
 
   LTaskProc :=
     procedure
@@ -894,6 +893,11 @@ begin
     Result := 'Bearer ' + FConfig.GetOAuthAccessToken(FProviderId)
   else
     Result := 'Bearer ' + GetApiKey;
+end;
+
+function TRadIAProviderBase.GetAuthorizationHeader: string;
+begin
+  Result := 'Bearer ' + GetApiKey;
 end;
 
 function TRadIAProviderBase.HasValidCredentials: Boolean;
