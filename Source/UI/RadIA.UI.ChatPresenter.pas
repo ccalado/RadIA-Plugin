@@ -13,12 +13,8 @@ type
     procedure SetRequestState(const AInProgress: Boolean);
     procedure UpdateTokensStats(const AStats: string);
     procedure PostMessageToWeb(const AJson: string);
-    procedure PostMessageToBackgroundWeb(const AJson: string);
     procedure ApplyCurrentTheme;
 
-    procedure CreateBackgroundBrowser;
-    function IsBackgroundBrowserInitialized: Boolean;
-    procedure NavigateBackgroundBrowser(const AUrl: string);
     procedure ShowLoginWindow(const AUrl: string; AOnLoginSuccess: TProc);
 
     procedure UpdateProviders(const AProviders: TArray<string>; const AActiveProvider: string);
@@ -66,8 +62,6 @@ type
     FLifecycleGuard: IInterface;
     FActiveModels: TArray<string>;
     FPendingPrompt: string;
-    FBackgroundBrowserReady: Boolean;
-    FCurrentBackgroundUrl: string;
     FLoginPopupOpen: Boolean;
     FOwnsService: Boolean;
     FModelsProvider: IRadIAProvider;
@@ -98,7 +92,6 @@ type
     function FindTemplateForCommand(const ACommand, AArgument: string; out ATemplate: TPromptTemplate): Boolean;
 
     function IsProviderConfigured(const AProviderId: string): Boolean;
-    function GetWebLoginUrl(const AProvider: string): string;
     function CanChangeSession: Boolean;
 
     procedure SendInitialConfigToWeb;
@@ -234,8 +227,6 @@ begin
   FLifecycleGuard := TLifecycleGuard.Create;
   FActiveModels := [];
   FPendingPrompt := '';
-  FBackgroundBrowserReady := False;
-  FCurrentBackgroundUrl := '';
   FLoginPopupOpen := False;
 
   // WebViewBridge events removed
@@ -352,15 +343,7 @@ begin
   end;
 end;
 
-function TRadIAChatPresenter.GetWebLoginUrl(const AProvider: string): string;
-begin
-  if SameText(AProvider, 'Gemini') then
-    Result := 'https://gemini.google.com'
-  else if SameText(AProvider, 'OpenAI') then
-    Result := 'https://chatgpt.com'
-  else
-    Result := '';
-end;
+
 
 function TRadIAChatPresenter.CanChangeSession: Boolean;
 begin
@@ -548,8 +531,6 @@ begin
 end;
 
 procedure TRadIAChatPresenter.ChangeProvider(const AProviderName: string);
-var
-  LUrl: string;
 begin
   if FLoadingConfig then
     Exit;
@@ -558,24 +539,6 @@ begin
   FConfig.SetActiveProvider(AProviderName);
   FConfig.Save;
   UpdateModelsCombo;
-
-  LUrl := GetWebLoginUrl(AProviderName);
-  if not LUrl.IsEmpty then
-  begin
-    if not FView.IsBackgroundBrowserInitialized then
-    begin
-      TLogger.Log('ChangeProvider: Initializing background browser for newly selected Web Login provider.', 'UI');
-      FBackgroundBrowserReady := False;
-      FView.CreateBackgroundBrowser;
-    end
-    else if not SameText(FCurrentBackgroundUrl, LUrl) then
-    begin
-      TLogger.Log(Format('ChangeProvider: Preventive navigation of background browser to %s', [LUrl]), 'UI');
-      FBackgroundBrowserReady := False;
-      FCurrentBackgroundUrl := LUrl;
-      FView.NavigateBackgroundBrowser(LUrl);
-    end;
-  end;
 end;
 
 procedure TRadIAChatPresenter.ChangeModel(const AModelName: string);
@@ -944,7 +907,7 @@ begin
     LStats := Self.FAccumulatedUsage.FormatStats;
     if Self.FConfig.QuotaEnabled and (not Self.FConfig.IsWebLoginProvider(AActiveProvider)) then
     begin
-      LStats := LStats + Format(' Â· Quota %d%%',
+      LStats := LStats + Format(' · Quota %d%%',
         [Round((Self.FConfig.QuotaUsed / Self.FConfig.QuotaLimit) * 100)]);
     end;
 
@@ -1170,7 +1133,7 @@ begin
       Self.FConfig.AddToQuotaUsage(LUsage);
     LStats := Self.FAccumulatedUsage.FormatStats;
     if Self.FConfig.QuotaEnabled and (not Self.FConfig.IsWebLoginProvider(AActiveProvider)) then
-      LStats := LStats + Format(' Â· Quota %d%%',
+      LStats := LStats + Format(' · Quota %d%%',
         [Round((Self.FConfig.QuotaUsed / Self.FConfig.QuotaLimit) * 100)]);
     Self.PostToWebView('update_tokens', '', LStats);
   end;
@@ -1259,8 +1222,6 @@ end;
 
 
 procedure TRadIAChatPresenter.OnWebViewReady;
-var
-  LActiveProvider: string;
 begin
   FWebViewReady := True;
   FView.ApplyCurrentTheme;
@@ -1272,12 +1233,7 @@ begin
     PostToWebView('show_typing', '', '');
   end;
 
-  LActiveProvider := FConfig.GetActiveProvider;
-  if not GetWebLoginUrl(LActiveProvider).IsEmpty then
-  begin
-    TLogger.Log('OnWebViewReady: Pre-initializing background browser for Web Login provider.', 'UI');
-    FView.CreateBackgroundBrowser;
-  end;
+
 end;
 
 procedure TRadIAChatPresenter.QueueOnUI(const AProcedure: TProc);

@@ -57,16 +57,9 @@ type
     FPopupMenuTemplates: TPopupMenu;
     FLifecycleGuard: IInterface;
     FEdgeBrowser: TEdgeBrowser;
-    FEdgeBrowserWeb: TEdgeBrowser;
-    FPnlBrowserWeb: TPanel;
-    FBrowserWebInitialized: Boolean;
 
-    procedure CreateEdgeBrowserWeb;
-    procedure ConfigureWebViewSettings(const ADefaultInterface: ICoreWebView2);
-    procedure InjectBridgeScript(const ADefaultInterface: ICoreWebView2);
-    procedure EdgeBrowserWebCreateWebViewCompleted(Sender: TCustomEdgeBrowser; AResult: HRESULT);
-    procedure EdgeBrowserWebSourceChanged(Sender: TCustomEdgeBrowser; IsNewDocument: Boolean);
-    procedure EdgeBrowserWebWebMessageReceived(Sender: TCustomEdgeBrowser; Args: TWebMessageReceivedEventArgs);
+
+
 
     procedure UpdateWebViewNavigation;
     procedure UpdateSendButtonVisual(const AInProgress: Boolean);
@@ -101,12 +94,7 @@ type
     procedure SetRequestState(const AInProgress: Boolean);
     procedure UpdateTokensStats(const AStats: string);
     procedure PostMessageToWeb(const AJson: string);
-    procedure PostMessageToBackgroundWeb(const AJson: string);
     procedure ApplyCurrentTheme;
-
-    procedure CreateBackgroundBrowser;
-    function IsBackgroundBrowserInitialized: Boolean;
-    procedure NavigateBackgroundBrowser(const AUrl: string);
     procedure ShowLoginWindow(const AUrl: string; AOnLoginSuccess: TProc);
 
     procedure UpdateProviders(const AProviders: TArray<string>; const AActiveProvider: string);
@@ -290,10 +278,6 @@ procedure TRadIAFrameAIChat.CleanupBrowsers;
 begin
   if not GIsShuttingDown then
   begin
-    if Assigned(FEdgeBrowserWeb) then
-      FEdgeBrowserWeb.Parent := nil;
-    FreeAndNil(FEdgeBrowserWeb);
-    FreeAndNil(FPnlBrowserWeb);
     if Assigned(FEdgeBrowser) then
       FEdgeBrowser.Parent := nil;
     FreeAndNil(FEdgeBrowser);
@@ -301,8 +285,6 @@ begin
   end
   else
   begin
-    if Assigned(FEdgeBrowserWeb) then
-      FEdgeBrowserWeb.Parent := nil;
     if Assigned(FEdgeBrowser) then
       FEdgeBrowser.Parent := nil;
   end;
@@ -373,11 +355,9 @@ end;
 procedure TRadIAFrameAIChat.DestroyWnd;
 var
   LEdgeToFree: TEdgeBrowser;
-  LEdgeWebToFree: TEdgeBrowser;
 begin
   FBrowserInitialized := False;
   FWebViewInitialized := False;
-  FBrowserWebInitialized := False;
 
   if Assigned(FEdgeBrowser) then
   begin
@@ -391,22 +371,6 @@ begin
         procedure
         begin
           LEdgeToFree.Free;
-        end));
-    end;
-  end;
-
-  if Assigned(FEdgeBrowserWeb) then
-  begin
-    LEdgeWebToFree := FEdgeBrowserWeb;
-    FEdgeBrowserWeb := nil;
-    LEdgeWebToFree.Parent := nil;
-    if not GIsShuttingDown then
-    begin
-      TThread.Queue(nil,
-        TThreadProcedure(
-        procedure
-        begin
-          LEdgeWebToFree.Free;
         end));
     end;
   end;
@@ -827,29 +791,7 @@ begin
   end;
 end;
 
-procedure TRadIAFrameAIChat.PostMessageToBackgroundWeb(const AJson: string);
-begin
-  if FBrowserWebInitialized and Assigned(FEdgeBrowserWeb) and Assigned(FEdgeBrowserWeb.DefaultInterface) then
-  begin
-    FEdgeBrowserWeb.DefaultInterface.PostWebMessageAsJson(PChar(AJson));
-  end;
-end;
 
-procedure TRadIAFrameAIChat.CreateBackgroundBrowser;
-begin
-  CreateEdgeBrowserWeb;
-end;
-
-function TRadIAFrameAIChat.IsBackgroundBrowserInitialized: Boolean;
-begin
-  Result := FBrowserWebInitialized;
-end;
-
-procedure TRadIAFrameAIChat.NavigateBackgroundBrowser(const AUrl: string);
-begin
-  if Assigned(FEdgeBrowserWeb) then
-    FEdgeBrowserWeb.Navigate(AUrl);
-end;
 
 procedure TRadIAFrameAIChat.ShowLoginWindow(const AUrl: string; AOnLoginSuccess: TProc);
 begin
@@ -1040,96 +982,6 @@ begin
   finally
     LForm.Free;
   end;
-end;
-
-procedure TRadIAFrameAIChat.CreateEdgeBrowserWeb;
-begin
-  if not Assigned(FPnlBrowserWeb) then
-  begin
-    FPnlBrowserWeb := TPanel.Create(Self);
-    FPnlBrowserWeb.Parent := Self;
-    FPnlBrowserWeb.BevelOuter := bvNone;
-    FPnlBrowserWeb.Caption := '';
-    FPnlBrowserWeb.Left := -5000;
-    FPnlBrowserWeb.Top := 0;
-    FPnlBrowserWeb.Width := 10;
-    FPnlBrowserWeb.Height := 10;
-    FPnlBrowserWeb.Visible := True;
-  end;
-
-  if not Assigned(FEdgeBrowserWeb) then
-  begin
-    FEdgeBrowserWeb := TEdgeBrowser.Create(nil);
-    FEdgeBrowserWeb.Parent := FPnlBrowserWeb;
-    FEdgeBrowserWeb.Align := alClient;
-    FEdgeBrowserWeb.OnCreateWebViewCompleted := EdgeBrowserWebCreateWebViewCompleted;
-    FEdgeBrowserWeb.OnSourceChanged := EdgeBrowserWebSourceChanged;
-    FEdgeBrowserWeb.OnWebMessageReceived := EdgeBrowserWebWebMessageReceived;
-
-    FEdgeBrowserWeb.UserDataFolder := TPath.Combine(TPath.GetHomePath, 'RadIA\WebView2Web');
-    FEdgeBrowserWeb.CreateWebView;
-  end;
-end;
-
-procedure TRadIAFrameAIChat.ConfigureWebViewSettings(const ADefaultInterface: ICoreWebView2);
-var
-  LSettings: ICoreWebView2Settings;
-  LSettings2: ICoreWebView2Settings2_Local;
-begin
-  if Succeeded(ADefaultInterface.Get_Settings(LSettings)) and Assigned(LSettings) then
-  begin
-    LSettings.Set_AreDevToolsEnabled(1);
-    LSettings.Set_AreDefaultContextMenusEnabled(1);
-
-    if Succeeded(LSettings.QueryInterface(ICoreWebView2Settings2_Local, LSettings2)) and Assigned(LSettings2) then
-    begin
-      LSettings2.Put_UserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, ' +
-          'like Gecko) Chrome/120.0.0.0 Safari/537.36');
-    end;
-  end;
-end;
-
-procedure TRadIAFrameAIChat.InjectBridgeScript(const ADefaultInterface: ICoreWebView2);
-var
-  LScriptFile: string;
-  LScriptContent: string;
-begin
-  LScriptFile := TPath.Combine(FWebFilesDir, 'bridge.js');
-  if TFile.Exists(LScriptFile) then
-  begin
-    try
-      LScriptContent := TFile.ReadAllText(LScriptFile, TEncoding.UTF8);
-      ADefaultInterface.AddScriptToExecuteOnDocumentCreated(PWideChar(LScriptContent), nil);
-    except
-      on E: Exception do
-        TLogger.Log('Error reading or injecting bridge script to Web view: ' + E.Message, 'UI');
-    end;
-  end;
-end;
-
-procedure TRadIAFrameAIChat.EdgeBrowserWebCreateWebViewCompleted(Sender: TCustomEdgeBrowser; AResult: HRESULT);
-begin
-  if Failed(AResult) then
-    Exit;
-
-  FBrowserWebInitialized := True;
-  if Assigned(FEdgeBrowserWeb.DefaultInterface) then
-  begin
-    ConfigureWebViewSettings(FEdgeBrowserWeb.DefaultInterface);
-    InjectWebViewScrollbarStyle(FEdgeBrowserWeb, 'background Web view');
-    InjectBridgeScript(FEdgeBrowserWeb.DefaultInterface);
-  end;
-end;
-
-procedure TRadIAFrameAIChat.EdgeBrowserWebSourceChanged(Sender: TCustomEdgeBrowser; IsNewDocument: Boolean);
-begin
-  if True then ; // Web Login is deprecated
-end;
-
-procedure TRadIAFrameAIChat.EdgeBrowserWebWebMessageReceived(Sender: TCustomEdgeBrowser;
-    Args: TWebMessageReceivedEventArgs);
-begin
-  if True then ; // Web Login is deprecated
 end;
 
 end.

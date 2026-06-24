@@ -1,4 +1,4 @@
-unit RadIA.Tests.ChatPresenter;
+﻿unit RadIA.Tests.ChatPresenter;
 
 interface
 
@@ -13,10 +13,7 @@ type
     FRequestStateSetCalled: Boolean;
     FTokensStatsText: string;
     FLastPostedJson: string;
-    FLastPostedBackgroundJson: string;
-    FBackgroundBrowserCreated: Boolean;
-    FBackgroundBrowserInitialized: Boolean;
-    FBackgroundBrowserNavigatedUrl: string;
+
     FLoginWindowShown: Boolean;
     FLoginWindowUrl: string;
     FLoginSuccessCallback: TProc;
@@ -48,11 +45,8 @@ type
     procedure SetRequestState(const AInProgress: Boolean);
     procedure UpdateTokensStats(const AStats: string);
     procedure PostMessageToWeb(const AJson: string);
-    procedure PostMessageToBackgroundWeb(const AJson: string);
     procedure ApplyCurrentTheme;
-    procedure CreateBackgroundBrowser;
-    function IsBackgroundBrowserInitialized: Boolean;
-    procedure NavigateBackgroundBrowser(const AUrl: string);
+
     procedure ShowLoginWindow(const AUrl: string; AOnLoginSuccess: TProc);
     procedure UpdateProviders(const AProviders: TArray<string>; const AActiveProvider: string);
     procedure UpdateModels(const AModels: TArray<string>; const AActiveModel: string; const AEnabled: Boolean);
@@ -72,12 +66,7 @@ type
     property RequestStateSetCalled: Boolean read FRequestStateSetCalled write FRequestStateSetCalled;
     property TokensStatsText: string read FTokensStatsText write FTokensStatsText;
     property LastPostedJson: string read FLastPostedJson write FLastPostedJson;
-    property LastPostedBackgroundJson: string read FLastPostedBackgroundJson write FLastPostedBackgroundJson;
-    property BackgroundBrowserCreated: Boolean read FBackgroundBrowserCreated write FBackgroundBrowserCreated;
-    property BackgroundBrowserInitialized: Boolean
-      read FBackgroundBrowserInitialized write FBackgroundBrowserInitialized;
-    property BackgroundBrowserNavigatedUrl: string
-      read FBackgroundBrowserNavigatedUrl write FBackgroundBrowserNavigatedUrl;
+
     property LoginWindowShown: Boolean read FLoginWindowShown write FLoginWindowShown;
     property LoginWindowUrl: string read FLoginWindowUrl write FLoginWindowUrl;
     property LoginSuccessCallback: TProc read FLoginSuccessCallback write FLoginSuccessCallback;
@@ -189,8 +178,7 @@ begin
   inherited Create;
   RequestStateInProgress := False;
   RequestStateSetCalled := False;
-  BackgroundBrowserCreated := False;
-  BackgroundBrowserInitialized := True;
+
   LoginWindowShown := False;
   PromptFocused := False;
   EditorTextReplaced := False;
@@ -224,10 +212,7 @@ begin
   PostedMessages.Add(AJson);
 end;
 
-procedure TMockChatView.PostMessageToBackgroundWeb(const AJson: string);
-begin
-  LastPostedBackgroundJson := AJson;
-end;
+
 
 procedure TMockChatView.ApplyCurrentTheme;
 begin
@@ -235,20 +220,7 @@ begin
   if True then ;
 end;
 
-procedure TMockChatView.CreateBackgroundBrowser;
-begin
-  BackgroundBrowserCreated := True;
-end;
 
-function TMockChatView.IsBackgroundBrowserInitialized: Boolean;
-begin
-  Result := BackgroundBrowserInitialized;
-end;
-
-procedure TMockChatView.NavigateBackgroundBrowser(const AUrl: string);
-begin
-  BackgroundBrowserNavigatedUrl := AUrl;
-end;
 
 procedure TMockChatView.ShowLoginWindow(const AUrl: string; AOnLoginSuccess: TProc);
 begin
