@@ -1,4 +1,4 @@
-unit RadIA.Tests.IndyLoopback;
+﻿unit RadIA.Tests.IndyLoopback;
 
 interface
 
@@ -30,6 +30,8 @@ type
     procedure TestFailureCallbackRequest;
     [Test]
     procedure TestNotFoundRequest;
+    [Test]
+    procedure TestSuccessfulAuthCallbackRequest;
   end;
 
 implementation
@@ -133,6 +135,28 @@ begin
     LResponse := LClient.Get('http://127.0.0.1:61238/invalid-url');
     Assert.AreEqual(404, LResponse.StatusCode);
     Assert.IsFalse(FCallbackCalled);
+  finally
+    LClient.Free;
+  end;
+end;
+
+procedure TTestIndyLoopback.TestSuccessfulAuthCallbackRequest;
+var
+  LClient: THTTPClient;
+  LResponse: IHTTPResponse;
+begin
+  FServer.Start(61239, LoopbackCallback);
+  Assert.IsTrue(FServer.IsRunning);
+
+  LClient := THTTPClient.Create;
+  try
+    LResponse := LClient.Get('http://127.0.0.1:61239/auth/callback?code=my-auth-code');
+    Assert.AreEqual(200, LResponse.StatusCode);
+    Assert.IsTrue(LResponse.ContentAsString.Contains('Successful!'));
+
+    Assert.IsTrue(FCallbackCalled);
+    Assert.AreEqual('my-auth-code', FReceivedCode);
+    Assert.IsEmpty(FReceivedError);
   finally
     LClient.Free;
   end;

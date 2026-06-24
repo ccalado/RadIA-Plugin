@@ -1,4 +1,4 @@
-unit RadIA.Core.IndyLoopback;
+﻿unit RadIA.Core.IndyLoopback;
 
 interface
 
@@ -234,7 +234,9 @@ begin
   LURI := ARequestInfo.URI;
   TLogger.Log('Loopback received HTTP request: ' + LURI, 'IndyLoopback');
 
-  if LURI.StartsWith('/callback', True) or LURI.Equals('/') then
+  if LURI.StartsWith('/callback', True) or
+     LURI.StartsWith('/auth/callback', True) or
+     LURI.Equals('/') then
   begin
     HandleCallbackRoute(ARequestInfo, AResponseInfo);
   end
