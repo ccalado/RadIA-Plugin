@@ -34,7 +34,8 @@ implementation
 
 uses
   System.SysUtils, System.Classes, System.JSON, Winapi.Windows, System.Win.Registry,
-  RadIA.Core.ProviderRegistry, RadIA.Core.Types, RadIA.Core.TokenUsage;
+  System.Generics.Collections, RadIA.Core.ProviderRegistry, RadIA.Core.Types,
+  RadIA.Core.TokenUsage;
 
 { TRadIAOpenAIProvider }
 
@@ -185,15 +186,38 @@ var
   LThread: TThread;
 begin
   LActiveModel := GetActiveModel;
+
+  if not (SameText(LActiveModel, MODEL_OPENAI_GPT54) or
+          SameText(LActiveModel, MODEL_OPENAI_GPT54_MINI)) then
+  begin
+    if AIsStream then
+      AStreamCallback('', True, Format(
+        'Error: The selected model ''%s'' is not supported in ChatGPT Plus (OAuth) mode. ' +
+        'Please select a compatible model (gpt-5.4 or gpt-5.4-mini) in the chat panel.',
+        [LActiveModel]))
+    else
+      ACallback('', Format(
+        'Error: The selected model ''%s'' is not supported in ChatGPT Plus (OAuth) mode. ' +
+        'Please select a compatible model (gpt-5.4 or gpt-5.4-mini) in the chat panel.',
+        [LActiveModel]), False, TTokenUsage.Empty);
+    Exit;
+  end;
+
   LCodexPath := GetCodexExecutablePath;
 
   if LCodexPath.IsEmpty then
   begin
     if AIsStream then
-      AStreamCallback('', True, 'Erro: O executÃ¡vel do Codex (codex.exe) nÃ£o foi encontrado no sistema.')
+      AStreamCallback('', True,
+        'Error: The Codex CLI executable (codex.exe) was not found on your system. ' +
+        'Please install the OpenAI Codex CLI. ' +
+        '[Click here for installation instructions](https://github.com/openai/codex-cli)')
     else
-      ACallback('', 'Erro: O executÃ¡vel do Codex (codex.exe) nÃ£o foi encontrado no sistema.', False,
-        TTokenUsage.Empty);
+      ACallback('',
+        'Error: The Codex CLI executable (codex.exe) was not found on your system. ' +
+        'Please install the OpenAI Codex CLI. ' +
+        '[Click here for installation instructions](https://github.com/openai/codex-cli)',
+        False, TTokenUsage.Empty);
     Exit;
   end;
 
@@ -221,8 +245,7 @@ begin
       LBuffer: array[0..4095] of Byte;
       LBytesRead, LBytesWritten: DWORD;
       LOutputStr: string;
-      LCurrentLine: string;
-      LChar: Char;
+      LLineBytes: TList<Byte>;
       I: Integer;
       LJsonStr: string;
       LJson: TJSONObject;
@@ -274,64 +297,114 @@ begin
         CloseHandle(LHWriteIn);
 
         LOutputStr := '';
-        LCurrentLine := '';
         LResponseText := '';
         LInputTokens := 0;
         LOutputTokens := 0;
 
-        while ReadFile(LHReadOut, LBuffer[0], SizeOf(LBuffer), LBytesRead, nil) and (LBytesRead > 0) do
-        begin
-          for I := 0 to LBytesRead - 1 do
+        LLineBytes := TList<Byte>.Create;
+        try
+          while ReadFile(LHReadOut, LBuffer[0], SizeOf(LBuffer), LBytesRead, nil) and (LBytesRead > 0) do
           begin
-            LChar := Char(LBuffer[I]);
-            if LChar = #10 then
+            for I := 0 to LBytesRead - 1 do
             begin
-              LJsonStr := LCurrentLine.Trim;
-              LCurrentLine := '';
-
-              if not LJsonStr.IsEmpty then
+              if LBuffer[I] = 10 then
               begin
-                try
-                  LJson := TJSONObject.ParseJSONValue(LJsonStr) as TJSONObject;
-                  if Assigned(LJson) then
-                  begin
-                    try
-                      LType := LJson.GetValue<string>('type', '');
+                if LLineBytes.Count > 0 then
+                begin
+                  LJsonStr := TEncoding.UTF8.GetString(LLineBytes.ToArray).Trim;
+                  LLineBytes.Clear;
+                end
+                else
+                  LJsonStr := '';
 
-                      if SameText(LType, 'thread.started') then
-                      begin
-                        FThreadId := LJson.GetValue<string>('thread_id', '');
-                      end
-                      else if SameText(LType, 'item.completed') then
-                      begin
-                        LItemObj := LJson.GetValue('item') as TJSONObject;
-                        if Assigned(LItemObj) then
+                if not LJsonStr.IsEmpty then
+                begin
+                  try
+                    LJson := TJSONObject.ParseJSONValue(LJsonStr) as TJSONObject;
+                    if Assigned(LJson) then
+                    begin
+                      try
+                        LType := LJson.GetValue<string>('type', '');
+
+                        if SameText(LType, 'thread.started') then
                         begin
-                          LResponseText := LItemObj.GetValue<string>('text', '');
-                        end;
-                      end
-                      else if SameText(LType, 'turn.completed') then
-                      begin
-                        LUsageObj := LJson.GetValue('usage') as TJSONObject;
-                        if Assigned(LUsageObj) then
+                          FThreadId := LJson.GetValue<string>('thread_id', '');
+                        end
+                        else if SameText(LType, 'item.completed') then
                         begin
-                          LInputTokens := LUsageObj.GetValue<Integer>('input_tokens', 0);
-                          LOutputTokens := LUsageObj.GetValue<Integer>('output_tokens', 0);
+                          LItemObj := LJson.GetValue('item') as TJSONObject;
+                          if Assigned(LItemObj) then
+                          begin
+                            LResponseText := LItemObj.GetValue<string>('text', '');
+                          end;
+                        end
+                        else if SameText(LType, 'turn.completed') then
+                        begin
+                          LUsageObj := LJson.GetValue('usage') as TJSONObject;
+                          if Assigned(LUsageObj) then
+                          begin
+                            LInputTokens := LUsageObj.GetValue<Integer>('input_tokens', 0);
+                            LOutputTokens := LUsageObj.GetValue<Integer>('output_tokens', 0);
+                          end;
                         end;
+                      finally
+                        LJson.Free;
                       end;
-                    finally
-                      LJson.Free;
                     end;
+                  except
                   end;
-                except
                 end;
+              end
+              else if LBuffer[I] <> 13 then
+              begin
+                LLineBytes.Add(LBuffer[I]);
               end;
-            end
-            else if LChar <> #13 then
-            begin
-              LCurrentLine := LCurrentLine + LChar;
             end;
           end;
+
+          if LLineBytes.Count > 0 then
+          begin
+            LJsonStr := TEncoding.UTF8.GetString(LLineBytes.ToArray).Trim;
+            if not LJsonStr.IsEmpty then
+            begin
+              try
+                LJson := TJSONObject.ParseJSONValue(LJsonStr) as TJSONObject;
+                if Assigned(LJson) then
+                begin
+                  try
+                    LType := LJson.GetValue<string>('type', '');
+
+                    if SameText(LType, 'thread.started') then
+                    begin
+                      FThreadId := LJson.GetValue<string>('thread_id', '');
+                    end
+                    else if SameText(LType, 'item.completed') then
+                    begin
+                      LItemObj := LJson.GetValue('item') as TJSONObject;
+                      if Assigned(LItemObj) then
+                      begin
+                        LResponseText := LItemObj.GetValue<string>('text', '');
+                      end;
+                    end
+                    else if SameText(LType, 'turn.completed') then
+                    begin
+                      LUsageObj := LJson.GetValue('usage') as TJSONObject;
+                      if Assigned(LUsageObj) then
+                      begin
+                        LInputTokens := LUsageObj.GetValue<Integer>('input_tokens', 0);
+                        LOutputTokens := LUsageObj.GetValue<Integer>('output_tokens', 0);
+                      end;
+                    end;
+                  finally
+                    LJson.Free;
+                  end;
+                end;
+              except
+              end;
+            end;
+          end;
+        finally
+          LLineBytes.Free;
         end;
 
         CloseHandle(LHReadOut);
@@ -343,7 +416,7 @@ begin
 
         if LResponseText.IsEmpty then
         begin
-          LResponseText := 'Erro: Nenhuma resposta gerada pelo Codex.';
+          LResponseText := 'Error: No response generated by Codex.';
         end;
 
         LUsage.PromptTokens := LInputTokens;
@@ -384,9 +457,9 @@ begin
               procedure
               begin
                 if AIsStream then
-                  AStreamCallback('', True, 'Erro ao criar o processo do Codex.')
+                  AStreamCallback('', True, 'Error: Failed to create the Codex process.')
                 else
-                  ACallback('', 'Erro ao criar o processo do Codex.', False,
+                  ACallback('', 'Error: Failed to create the Codex process.', False,
                     TTokenUsage.Empty);
               end
             )
