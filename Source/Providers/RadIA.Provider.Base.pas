@@ -1,4 +1,4 @@
-﻿unit RadIA.Provider.Base;
+unit RadIA.Provider.Base;
 
 interface
 
@@ -822,7 +822,9 @@ begin
 
   if not HasValidCredentials then
   begin
-    FallbackToDefaultModels(Format('Credentials (API Key or OAuth Token) are missing or invalid for %s. Using fallback models.', [GetName]));
+    FallbackToDefaultModels(Format(
+      'Credentials (API Key or OAuth Token) are missing or invalid for %s.',
+      [GetName]));
     Exit;
   end;
 
