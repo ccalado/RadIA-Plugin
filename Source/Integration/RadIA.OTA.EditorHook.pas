@@ -1,4 +1,4 @@
-unit RadIA.OTA.EditorHook;
+﻿unit RadIA.OTA.EditorHook;
 
 interface
 
@@ -808,7 +808,9 @@ begin
     LBuilder.AppendLine('Do not introduce dependencies that require changing the unit uses clause unless ' +
         'there is no practical alternative.');
     LBuilder.AppendLine('Use inline local variable declarations only if they are necessary and compatible ' +
-        'with Delphi 10.3 or newer.');
+        'with Delphi 10.3 or newer. Remember that Delphi inline variables must be declared individually, ' +
+        'each on its own line prefixed with the "var" keyword (e.g., "var LVar: Type;"). ' +
+        'Do not group multiple variables under a single "var" block inside begin..end.');
     LBuilder.AppendLine('Preserve valid Delphi formatting and indentation using two spaces per indentation level.');
     LBuilder.AppendLine('The code will be inserted immediately below the natural-language comment.');
     LBuilder.AppendLine;
