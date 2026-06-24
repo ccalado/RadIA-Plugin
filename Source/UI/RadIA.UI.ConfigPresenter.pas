@@ -658,7 +658,7 @@ begin
     LTokenUrl := 'https://auth.openai.com/oauth/token';
     LClientId := 'app_EMoamEEZ73f0CkXaXp7hrann';
     LClientSecret := '';
-    LPort := 59182;
+    LPort := 1455;
   end
   else if SameText(AProviderName, 'Gemini') then
   begin

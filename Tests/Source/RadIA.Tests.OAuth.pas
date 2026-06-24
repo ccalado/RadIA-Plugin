@@ -1,4 +1,4 @@
-unit RadIA.Tests.OAuth;
+﻿unit RadIA.Tests.OAuth;
 
 interface
 
@@ -217,20 +217,20 @@ begin
     TRadIAOAuthParams.Create(
       'https://auth.openai.com/oauth/authorize',
       'https://auth.openai.com/oauth/token',
-      'radia-delphi-plugin',
+      'app_EMoamEEZ73f0CkXaXp7hrann',
       '',
-      59182
+      1455
     ),
     nil,
     nil
   );
 
   Assert.IsTrue(FMockServer.IsRunning);
-  Assert.AreEqual(59182, FMockServer.GetActivePort);
+  Assert.AreEqual(1455, FMockServer.GetActivePort);
   Assert.IsNotEmpty(FManager.LastOpenedUrl);
   Assert.IsTrue(FManager.LastOpenedUrl.Contains('https://auth.openai.com/oauth/authorize'));
-  Assert.IsTrue(FManager.LastOpenedUrl.Contains('client_id=radia-delphi-plugin'));
-  Assert.IsTrue(FManager.LastOpenedUrl.Contains('redirect_uri=http%3A%2F%2Flocalhost%3A59182%2Fcallback'));
+  Assert.IsTrue(FManager.LastOpenedUrl.Contains('client_id=app_EMoamEEZ73f0CkXaXp7hrann'));
+  Assert.IsTrue(FManager.LastOpenedUrl.Contains('redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback'));
   Assert.IsTrue(FManager.LastOpenedUrl.Contains('code_challenge='));
   Assert.IsTrue(FManager.LastOpenedUrl.Contains('code_challenge_method=S256'));
   Assert.IsTrue(FManager.LastOpenedUrl.Contains('state='));
@@ -249,9 +249,9 @@ begin
     TRadIAOAuthParams.Create(
       'https://auth.openai.com/oauth/authorize',
       'https://auth.openai.com/oauth/token',
-      'radia-delphi-plugin',
+      'app_EMoamEEZ73f0CkXaXp7hrann',
       '',
-      59182
+      1455
     ),
     procedure
     begin
@@ -280,9 +280,9 @@ begin
     TRadIAOAuthParams.Create(
       'https://auth.openai.com/oauth/authorize',
       'https://auth.openai.com/oauth/token',
-      'radia-delphi-plugin',
+      'app_EMoamEEZ73f0CkXaXp7hrann',
       '',
-      59182
+      1455
     ),
     nil,
     nil
@@ -311,9 +311,9 @@ begin
     TRadIAOAuthParams.Create(
       'https://auth.openai.com/oauth/authorize',
       'https://auth.openai.com/oauth/token',
-      'radia-delphi-plugin',
+      'app_EMoamEEZ73f0CkXaXp7hrann',
       '',
-      59182
+      1455
     ),
     procedure
     begin
@@ -356,9 +356,9 @@ begin
     TRadIAOAuthParams.Create(
       'https://auth.openai.com/oauth/authorize',
       'https://auth.openai.com/oauth/token',
-      'radia-delphi-plugin',
+      'app_EMoamEEZ73f0CkXaXp7hrann',
       '',
-      59182
+      1455
     ),
     procedure
     begin

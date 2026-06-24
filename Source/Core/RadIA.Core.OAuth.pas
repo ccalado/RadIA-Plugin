@@ -179,7 +179,10 @@ begin
   FOnSuccess := AOnSuccess;
   FOnError := AOnError;
 
-  FRedirectUri := 'http://localhost:' + FPort.ToString + '/callback';
+  if SameText(FProviderName, 'openai') then
+    FRedirectUri := 'http://localhost:' + FPort.ToString + '/auth/callback'
+  else
+    FRedirectUri := 'http://localhost:' + FPort.ToString + '/callback';
   FCodeVerifier := GenerateVerifier;
   FCodeChallenge := GenerateChallenge(FCodeVerifier);
   FState := GenerateRandomString(16);
