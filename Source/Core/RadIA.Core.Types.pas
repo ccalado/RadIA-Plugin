@@ -18,6 +18,8 @@ const
   { Standard models for OpenAI }
   MODEL_OPENAI_GPT4O       = 'gpt-4o';
   MODEL_OPENAI_GPT4O_MINI  = 'gpt-4o-mini';
+  MODEL_OPENAI_GPT54       = 'gpt-5.4';
+  MODEL_OPENAI_GPT54_MINI  = 'gpt-5.4-mini';
 
   { Standard models for Anthropic Claude }
   MODEL_CLAUDE_35_SONNET = 'claude-3-5-sonnet-20240620';

@@ -1,4 +1,4 @@
-unit RadIA.Core.OAuth;
+﻿unit RadIA.Core.OAuth;
 
 interface
 
@@ -213,7 +213,10 @@ begin
   // For Gemini or scopes, you can append scope if needed
   if SameText(FProviderName, 'gemini') then
     LFullAuthUrl := LFullAuthUrl + '&scope=' + TNetEncoding.URL.Encode(
-      'https://www.googleapis.com/auth/generative-language.tuning');
+      'https://www.googleapis.com/auth/generative-language.tuning')
+  else if SameText(FProviderName, 'openai') then
+    LFullAuthUrl := LFullAuthUrl + '&scope=' + TNetEncoding.URL.Encode(
+      'openid profile email offline_access api.connectors.read api.connectors.invoke');
 
   TLogger.Log('Opening system browser: ' + LFullAuthUrl, 'OAuth');
   OpenBrowser(LFullAuthUrl);

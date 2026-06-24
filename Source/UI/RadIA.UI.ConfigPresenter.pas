@@ -1,4 +1,4 @@
-unit RadIA.UI.ConfigPresenter;
+﻿unit RadIA.UI.ConfigPresenter;
 
 interface
 
@@ -656,7 +656,7 @@ begin
   begin
     LAuthUrl := 'https://auth.openai.com/oauth/authorize';
     LTokenUrl := 'https://auth.openai.com/oauth/token';
-    LClientId := 'radia-delphi-plugin';
+    LClientId := 'app_EMoamEEZ73f0CkXaXp7hrann';
     LClientSecret := '';
     LPort := 59182;
   end

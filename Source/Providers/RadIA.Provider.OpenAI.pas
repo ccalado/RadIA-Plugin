@@ -1,4 +1,4 @@
-unit RadIA.Provider.OpenAI;
+﻿unit RadIA.Provider.OpenAI;
 
 interface
 
@@ -43,7 +43,10 @@ end;
 
 function TRadIAOpenAIProvider.GetAvailableModels: TArray<string>;
 begin
-  Result := TArray<string>.Create(MODEL_OPENAI_GPT4O_MINI, MODEL_OPENAI_GPT4O);
+  if SameText(FConfig.GetProviderAuthType(FProviderId), 'oauth') then
+    Result := TArray<string>.Create(MODEL_OPENAI_GPT54_MINI, MODEL_OPENAI_GPT54)
+  else
+    Result := TArray<string>.Create(MODEL_OPENAI_GPT4O_MINI, MODEL_OPENAI_GPT4O);
 end;
 
 function TRadIAOpenAIProvider.GetName: string;
@@ -70,7 +73,7 @@ end;
 
 function TRadIAOpenAIProvider.GetOAuthClientId: string;
 begin
-  Result := 'radia-delphi-plugin';
+  Result := 'app_EMoamEEZ73f0CkXaXp7hrann';
 end;
 
 
@@ -83,7 +86,7 @@ initialization
       'https://api.openai.com/v1',
       True, // HasApiKey
       True, // HasCustomUrl
-      [MODEL_OPENAI_GPT4O_MINI, MODEL_OPENAI_GPT4O],
+      [MODEL_OPENAI_GPT4O_MINI, MODEL_OPENAI_GPT4O, MODEL_OPENAI_GPT54_MINI, MODEL_OPENAI_GPT54],
       function(const ACfg: IRadIAConfig): IRadIAProvider
       begin
         Result := TRadIAOpenAIProvider.Create(ACfg);
