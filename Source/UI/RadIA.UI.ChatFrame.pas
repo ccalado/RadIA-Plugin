@@ -1,4 +1,4 @@
-unit RadIA.UI.ChatFrame;
+﻿unit RadIA.UI.ChatFrame;
 
 interface
 
@@ -373,9 +373,12 @@ end;
 procedure TRadIAFrameAIChat.DestroyWnd;
 var
   LEdgeToFree: TEdgeBrowser;
+  LEdgeWebToFree: TEdgeBrowser;
 begin
   FBrowserInitialized := False;
   FWebViewInitialized := False;
+  FBrowserWebInitialized := False;
+
   if Assigned(FEdgeBrowser) then
   begin
     LEdgeToFree := FEdgeBrowser;
@@ -391,6 +394,23 @@ begin
         end));
     end;
   end;
+
+  if Assigned(FEdgeBrowserWeb) then
+  begin
+    LEdgeWebToFree := FEdgeBrowserWeb;
+    FEdgeBrowserWeb := nil;
+    LEdgeWebToFree.Parent := nil;
+    if not GIsShuttingDown then
+    begin
+      TThread.Queue(nil,
+        TThreadProcedure(
+        procedure
+        begin
+          LEdgeWebToFree.Free;
+        end));
+    end;
+  end;
+
   inherited DestroyWnd;
 end;
 
