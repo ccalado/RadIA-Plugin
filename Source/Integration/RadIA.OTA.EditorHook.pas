@@ -1,4 +1,4 @@
-﻿unit RadIA.OTA.EditorHook;
+unit RadIA.OTA.EditorHook;
 
 interface
 
@@ -95,7 +95,7 @@ uses
   {$IFNDEF TESTS}
   RadIA.OTA.DockableForm,
   {$ENDIF}
-  RadIA.Core.Logger, RadIA.Core.Container, RadIA.Core.Service, RadIA.OTA.Adapter;
+  RadIA.Core.Logger, RadIA.Core.Container, RadIA.Core.Service, RadIA.OTA.Adapter, RadIA.OTA.Helper;
 
 const
   CEditorHookDelayMs = 2500;
@@ -800,7 +800,7 @@ var
 begin
   LBuilder := TStringBuilder.Create;
   try
-    LBuilder.AppendLine('You are generating Object Pascal code for Delphi.');
+    LBuilder.AppendLine('You are generating Object Pascal code for ' + TRadIAOTAHelper.GetDelphiVersionName + '.');
     LBuilder.AppendLine('Return only the statements that must be inserted inside the existing method body.');
     LBuilder.AppendLine('Do not return the method signature, the outer begin/end, explanations, or Markdown ' +
         'outside one pascal code block.');
@@ -811,6 +811,13 @@ begin
         'with Delphi 10.3 or newer. Remember that Delphi inline variables must be declared individually, ' +
         'each on its own line prefixed with the "var" keyword (e.g., "var LVar: Type;"). ' +
         'Do not group multiple variables under a single "var" block inside begin..end.');
+    {$IF CompilerVersion >= 36.0}
+    LBuilder.AppendLine('You can use multiline string literals (surrounded by triple single ' +
+        'quotes ''''''texto'''''') for long strings or formatting blocks.');
+    {$ELSE}
+    LBuilder.AppendLine('Do not use multiline string literals (triple single quotes). Instead, use traditional ' +
+        'single quotes and string concatenation (+ and sLineBreak / #13#10) for multiline text.');
+    {$ENDIF}
     LBuilder.AppendLine('Preserve valid Delphi formatting and indentation using two spaces per indentation level.');
     LBuilder.AppendLine('The code will be inserted immediately below the natural-language comment.');
     LBuilder.AppendLine;
