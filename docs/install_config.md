@@ -131,20 +131,4 @@ O script `.\build.ps1` aceita os seguintes parâmetros:
 > [!NOTE]
 > **Autodetecção do DUnitX:** Se o parâmetro `-Test` for fornecido, o instalador verifica automaticamente se o framework DUnitX está instalado no Delphi selecionado. Se o DUnitX não for encontrado, o script exibirá um aviso no console, desativará a execução dos testes de forma automática e prosseguirá normalmente com a compilação e instalação do plugin principal.
 
----
 
-## 5. Login Híbrido (Web Login Plus/Pro vs BYOK)
-
-O Rad IA permite que você opte por dois métodos de conexão para os provedores **Google Gemini** e **OpenAI ChatGPT**:
-1. **API Key (BYOK)**: Utiliza chaves de API oficiais e cobra por token consumido diretamente do seu saldo de desenvolvedor nas plataformas OpenAI Platform/Google AI Studio.
-2. **Web Login (Plus/Pro)**: Permite que você faça login diretamente nas suas contas pessoais ou corporativas de consumidor (ChatGPT Plus/Pro e Gemini Advanced) utilizando a interface oficial deles no WebView2 integrado do Rad IA.
-
-### Como Ativar e Usar o Web Login
-1. Acesse as Configurações (**Settings** no painel de chat ou o menu **Tools ➔ Options ➔ Third Party > Rad IA**).
-2. Selecione a aba do provedor (**Gemini** ou **OpenAI**).
-3. No campo **Connection Method**, selecione a opção **Web Login (Plus/Pro)**.
-4. Clique em **Save**.
-5. No painel de chat do Rad IA, selecione o provedor correspondente. Um botão de login em formato de cadeado 🔐 aparecerá no cabeçalho superior direito do chat.
-6. Clique no botão de cadeado 🔐. Isso abrirá um popup de autenticação nativo (`TFormWebLogin`).
-7. Faça login na sua conta na janela que se abre. A sessão e os cookies serão salvos de forma segura no diretório `%APPDATA%\RadIA\WebView2Data`, mantendo você conectado. Após o login bem-sucedido, você pode fechar o popup.
-8. Pronto! Agora você pode conversar normalmente pela própria interface nativa do chat do Rad IA (ou disparar ações no editor de código). O plugin usará uma WebView2 oculta em segundo plano para enviar os prompts e ler as respostas via streaming em tempo real, mantendo a experiência fluida e o design unificado.

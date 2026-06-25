@@ -10,6 +10,7 @@ The board below summarizes the current status of mapped short and medium-term fe
 
 | Feature / Task | Status | Difficulty | Priority | Target Version |
 | :--- | :---: | :---: | :---: | :---: |
+| **Editor Selection Fixes and Gemini OAuth Block** | ✅ Completed | 🟢 Low | ⭐⭐⭐⭐ High | v0.0.29 |
 | **Open Tools API Adapter and Network Testing** | ✅ Completed | 🟡 Medium | ⭐⭐⭐⭐ High | v0.0.28 |
 | **Resolution of Code Smells and Test Coverage Expansion** | ✅ Completed | 🟢 Low | ⭐⭐⭐⭐ High | v0.0.27 |
 | **Real Provider Icons with Official SVGs** | ✅ Completed | 🟢 Low | ⭐⭐⭐⭐ High | v0.0.26 |
@@ -52,6 +53,30 @@ For complete details on objectives, impacts, and technical specifications for ea
 ## ✅ 3. Completed History
 
 Check the implementation details of each completed feature grouped by target release version:
+
+<details>
+  <summary><b>📦 v0.0.29 — Editor Selection Fixes and Gemini OAuth Block (Click to expand)</b></summary>
+
+  #### 1. Fixing Editor Selection Detection
+  *   **Description**: Resolved a false positive issue where the Delphi IDE kept text marked in the background buffer (`LEditBuffer.EditBlock`) even after external clicks.
+  *   **Details**:
+      *   Refactored `GetSelectedText` in `TRadIAOTAEditorAdapter` to extract the selection from `LView.Block` (from the active view focused in the IDE) instead of `LEditBuffer.EditBlock`.
+      *   Kept the filtering validation checking if the starting and ending selection coordinates differ (`StartingColumn <> EndingColumn` or `StartingRow <> EndingRow`).
+      *   Programmatically collapsed the cursor with `LView.Position.Move` and cleared the block with `LEditBlock.Reset` after replacing the inserted text, ensuring newly generated texts do not remain selected.
+      *   Adjusted code explanation fallbacks in `ChatPresenter` to use `.Trim.IsEmpty` to ignore selections containing only whitespaces.
+
+  #### 2. Translating Typing Indicator
+  *   **Description**: Fixed language in the visual status of AI response processing.
+  *   **Details**:
+      *   Translated the status string in the modern indicator in `chat.js` from `"Pensando..."` to `"Thinking..."` for total consistency with default coding and UI language guidelines (en-US).
+
+  #### 3. Temporarily Blocking Google Gemini OAuth
+  *   **Description**: Added a blocking warning dialog in the Gemini OAuth flow because Google's security verification is still pending.
+  *   **Details**:
+      *   Added an informative error dialog at the beginning of `StartOAuthLogin` and `SendPromptToAI`, instructing to use API Keys and temporarily blocking login and prompt submission using Gemini in OAuth mode.
+      *   Removed references to "Web Login" from warnings, as the functionality was deprecated and fully removed in previous commits.
+
+</details>
 
 <details>
   <summary><b>📦 v0.0.28 — Open Tools API Adapter and Network Testing (Click to expand)</b></summary>

@@ -14,6 +14,18 @@ This document outlines the strategic planning and long-term vision of the **Rad 
 Below are the achievements and values delivered in each release version of the plugin:
 
 <details>
+  <summary><b>📦 v0.0.29 — Editor Selection Fixes and Gemini OAuth Block (Completed)</b></summary>
+
+  *   **Value Delivered**: Fixed critical issues regarding editor active selection detection and resets inside Delphi IDE, translated typing status to English, and implemented safety warnings to block the Google Gemini OAuth flow due to verification pending status.
+  *   **Highlights**:
+      *   Corrected text selection detection by querying `LView.Block` instead of `LEditBuffer.EditBlock` to accurately recognize when there is no visible active selection on screen, thus fallback to explaining the entire unit.
+      *   Introduced programmatical reset and cursor collapsing (`LEditBlock.Reset` and `LView.Position.Move`) after replacing/inserting code to prevent newly generated code from staying marked as selected in Delphi.
+      *   Translated the modern typing indicator text in the chat from `"Pensando..."` to `"Thinking..."` for complete consistency with standard en-US project-wide locale guidelines.
+      *   Implemented preventive barriers for Gemini OAuth logins and queries, displaying clear warning messages asking the user to use API Keys for now due to pending verification status, omitting any mention of the deprecated "Web Login".
+  *   👉 *See implementation details and tests in the [Technical Backlog (v0.0.29)](backlog.en.md#v0029--editor-selection-fixes-and-gemini-oauth-block-click-to-expand).*
+</details>
+
+<details>
   <summary><b>📦 v0.0.28 — Open Tools API Adapter and Network Testing (Completed)</b></summary>
 
   *   **Value Delivered**: Decoupled the dependency on the Delphi Open Tools API by introducing the `IRadIAEditorAdapter` pattern, enabling offline automated testing of the IDE code editor buffer and introducing network tests against IDE hangs.

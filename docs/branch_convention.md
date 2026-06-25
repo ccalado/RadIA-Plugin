@@ -12,7 +12,7 @@ Exemplos:
 
 ```text
 feat/chat-welcome-actions
-fix/web-login-empty-state
+fix/editor-selection-bug
 docs/release-process
 refactor/provider-session-handling
 ```
@@ -49,5 +49,5 @@ refactor/provider-session-handling
 * Escolha o prefixo pelo objetivo principal da branch.
 * Prefira uma branch por intenção de trabalho.
 * Evite nomes genéricos como `fix/adjustments`, `feat/new-stuff` ou `chore/misc`.
-* Quando houver issue ou tarefa rastreável, o identificador pode ser incluído ao final: `fix/web-login-empty-state-123`.
+* Quando houver issue ou tarefa rastreável, o identificador pode ser incluído ao final: `fix/editor-selection-bug-123`.
 * O prefixo da branch não obriga todos os commits a terem o mesmo prefixo, mas a história fica mais clara quando ambos estão alinhados.

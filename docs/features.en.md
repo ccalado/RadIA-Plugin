@@ -6,7 +6,7 @@ This document contains the complete checklist, categorization, and development s
 
 ## Complete Feature Checklist
 
-v0.0.25 note: the plugin now simplifies **Web Login** for ChatGPT/Gemini, confirms already authenticated sessions, and protects Smart Diff **Apply Changes** against duplicated code when the original editor selection is lost.
+v0.0.25 note: the plugin now protects Smart Diff **Apply Changes** against duplicated code when the original editor selection is lost.
 
 | Feature | Category | Description | Status |
 | :--- | :--- | :--- | :--- |
@@ -29,7 +29,7 @@ v0.0.25 note: the plugin now simplifies **Web Login** for ChatGPT/Gemini, confir
 | **Template Backup & Restore** | Chat UX | Transactional JSON import and export with schema validations and merge/overwrite UI options. | ✅ Completed |
 | **Google Gemini** | Provider | Native BYOK integration for Gemini 1.5 Pro and Gemini 1.5 Flash models. | ✅ Completed |
 | **OpenAI ChatGPT** | Provider | Native BYOK integration for GPT-4o, GPT-4o-mini, and others. | ✅ Completed |
-| **Hybrid Login (Web Login)**| Provider | Choose between BYOK (API Keys) or Web Login (Plus/Pro) for OpenAI and Gemini, opening the official provider page with the correct data folder, confirming already authenticated sessions, and keeping clear status text. | ✅ Completed |
+| **Hybrid Login (Web Login)**| Provider | Choose between BYOK (API Keys) or Web Login (Plus/Pro) for OpenAI and Gemini. | ❌ Removed (v0.0.29) |
 | **Anthropic Claude** | Provider | Native BYOK integration for Claude 3 Haiku and Claude 3.5 Sonnet. | ✅ Completed |
 | **DeepSeek** | Provider | Native BYOK integration for DeepSeek Chat and Reasoning models. | ✅ Completed |
 | **Groq** | Provider | Native BYOK integration for Llama, Mixtral, and Gemma models via Groq's high-speed cloud. | ✅ Completed |

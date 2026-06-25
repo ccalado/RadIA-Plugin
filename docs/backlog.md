@@ -10,6 +10,7 @@ O quadro abaixo resume o status atual das features mapeadas a curto e médio pra
 
 | Funcionalidade / Tarefa | Status | Dificuldade | Prioridade | Versão Alvo |
 | :--- | :---: | :---: | :---: | :---: |
+| **Correção de Seleção do Editor e Bloqueio do Gemini OAuth** | ✅ Concluído | 🟢 Baixa | ⭐⭐⭐⭐ Alta | v0.0.29 |
 | **Adapter da Open Tools API e Testes de Rede** | ✅ Concluído | 🟡 Média | ⭐⭐⭐⭐ Alta | v0.0.28 |
 | **Resolução de Code Smells e Ampliação de Testes** | ✅ Concluído | 🟢 Baixa | ⭐⭐⭐⭐ Alta | v0.0.27 |
 | **Ícones de Provedores Reais com SVGs Oficiais** | ✅ Concluído | 🟢 Baixa | ⭐⭐⭐⭐ Alta | v0.0.26 |
@@ -52,6 +53,30 @@ Para detalhes completos de objetivos, impactos e referências técnicas de cada 
 ## ✅ 3. Histórico de Conclusões (Completed)
 
 Consulte os detalhes de implementação de cada recurso agrupado por versão:
+
+<details>
+  <summary><b>📦 v0.0.29 — Correção de Seleção do Editor e Bloqueio do Gemini OAuth (Clique para expandir)</b></summary>
+
+  #### 1. Correção na Detecção de Seleção do Editor
+  *   **Descrição**: Resolução de falso positivo em que a IDE do Delphi mantinha o texto marcado em segundo plano no buffer (`LEditBuffer.EditBlock`) mesmo após cliques externos.
+  *   **Detalhes**:
+      *   Refatoração do método `GetSelectedText` em `TRadIAOTAEditorAdapter` para extrair a seleção a partir de `LView.Block` (da visualização atual focada na IDE) em vez de `LEditBuffer.EditBlock`.
+      *   Manutenção do filtro que valida se as coordenadas de início e fim da seleção são diferentes (`StartingColumn <> EndingColumn` ou `StartingRow <> EndingRow`).
+      *   Colapso programático do cursor com `LView.Position.Move` e limpeza do bloco com `LEditBlock.Reset` após substituição do texto inserido, garantindo que textos recém-gerados não permaneçam com status de selecionados.
+      *   Ajuste dos fallbacks de explicação de código no ChatPresenter para usar `.Trim.IsEmpty` para ignorar seleções que contêm apenas espaços em branco.
+
+  #### 2. Tradução do Indicador de Digitação
+  *   **Descrição**: Correção de idioma no status visual de processamento da resposta da IA.
+  *   **Detalhes**:
+      *   Tradução da string do status no indicador moderno no `chat.js` de `"Pensando..."` para `"Thinking..."` para total consistência com as diretrizes do idioma padrão do código e interface (en-US).
+
+  #### 3. Bloqueio Temporário do Google Gemini OAuth
+  *   **Descrição**: Criação de aviso de bloqueio no fluxo Gemini OAuth devido ao status de aprovação de segurança do Google ainda em andamento.
+  *   **Detalhes**:
+      *   Inserção de diálogo de erro informativo no início de `StartOAuthLogin` e `SendPromptToAI` instruindo a usar API Keys e bloqueando temporariamente o progresso do login e envio de prompts usando Gemini no modo OAuth.
+      *   Remoção de referências a "Web Login" dos avisos, uma vez que a funcionalidade foi depreciada e totalmente removida em commits passados.
+
+</details>
 
 <details>
   <summary><b>📦 v0.0.28 — Adapter da Open Tools API e Testes de Rede (Clique para expandir)</b></summary>

@@ -131,20 +131,4 @@ The `.\build.ps1` script supports the following switches:
 > [!NOTE]
 > **DUnitX Auto-Detection:** If the `-Test` parameter is provided, the installer automatically detects if the DUnitX framework is present in your selected Delphi installation. If DUnitX is missing, the script will display a warning, automatically disable tests execution, and proceed normally with compiling and installing the main plugin.
 
----
 
-## 5. Hybrid Login (Web Login Plus/Pro vs BYOK)
-
-Rad IA allows you to choose between two connection methods for both **Google Gemini** and **OpenAI ChatGPT** providers:
-1. **API Key (BYOK)**: Uses official API keys and charges per consumed token directly from your developer balance on OpenAI Platform/Google AI Studio.
-2. **Web Login (Plus/Pro)**: Allows you to log in directly to your personal or corporate consumer accounts (ChatGPT Plus/Pro and Gemini Advanced) using their official interface inside Rad IA's integrated WebView2.
-
-### How to Enable and Use Web Login
-1. Open settings (**Settings** at the top of the chat panel or via the menu **Tools ➔ Options ➔ Third Party > Rad IA**).
-2. Select the provider tab (**Gemini** or **OpenAI**).
-3. Under **Connection Method**, select **Web Login (Plus/Pro)**.
-4. Click **Save**.
-5. In the Rad IA chat panel, select the corresponding provider. A lock login button 🔐 will appear in the top-right corner of the chat header.
-6. Click the lock button 🔐. This will open a native Delphi login popup window (`TFormWebLogin`).
-7. Log in to your account in the popup window. Your session and cookies will be securely saved under `%APPDATA%\RadIA\WebView2Data` to keep you logged in. Once authenticated, you can close the popup.
-8. That's it! You can now chat normally inside Rad IA's unified local chat interface (or use right-click editor actions). The plugin will use a background, hidden WebView2 instance to send prompts and stream responses back in real time, keeping a unified premium experience.

@@ -79,7 +79,7 @@ Formulários e quadros visuais VCL desenvolvidos sob o padrão MVP (Model-View-P
 | [RadIA.UI.ConfigFrame.pas](file:///d:/Projetos/PluginDelphiIA/Source/UI/RadIA.UI.ConfigFrame.pas) | View física das opções de configuração (chaves de API, endpoints, temas, limites). |
 | [RadIA.UI.ConfigPresenter.pas](file:///d:/Projetos/PluginDelphiIA/Source/UI/RadIA.UI.ConfigPresenter.pas) | Presenter de configurações. Carrega e salva as opções de forma síncrona. |
 | [RadIA.UI.DiffForm.pas](file:///d:/Projetos/PluginDelphiIA/Source/UI/RadIA.UI.DiffForm.pas) | Tela de visualização lado a lado (Smart Diff) com botões para aceitar ou recusar a refatoração sugerida. |
-| [RadIA.UI.WebLoginForm.pas](file:///d:/Projetos/PluginDelphiIA/Source/UI/RadIA.UI.WebLoginForm.pas) | Tela especializada no fluxo de Web Login autenticado em navegadores internos para ChatGPT Plus e Gemini Advanced. |
+
 
 ---
 

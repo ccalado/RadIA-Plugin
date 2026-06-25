@@ -6,7 +6,7 @@ Este documento contém o checklist completo de recursos, categorização e statu
 
 ## Tabela Completa de Recursos
 
-Nota v0.0.25: o plugin agora simplifica o **Web Login** para ChatGPT/Gemini, confirma sessões já autenticadas e protege o **Apply Changes** do Smart Diff contra duplicação de código quando a seleção original do editor é perdida.
+Nota v0.0.25: o plugin agora protege o **Apply Changes** do Smart Diff contra duplicação de código quando a seleção original do editor é perdida.
 
 | Recurso | Categoria | Descrição | Status |
 | :--- | :--- | :--- | :--- |
@@ -29,7 +29,7 @@ Nota v0.0.25: o plugin agora simplifica o **Web Login** para ChatGPT/Gemini, con
 | **Backup de Templates** | Chat UX | Exportação e importação transacional em JSON de templates com validação estrutural de esquema e opção de mesclagem na UI. | ✅ Concluído |
 | **Google Gemini** | Provedor | Suporte nativo aos modelos Gemini 1.5 Flash e Pro via chaves próprias (BYOK). | ✅ Concluído |
 | **OpenAI ChatGPT** | Provedor | Suporte nativo aos modelos GPT-4o, GPT-4o-mini e outros. | ✅ Concluído |
-| **Login Híbrido (Web Login)**| Provedor | Permite alternar entre BYOK (API Keys) ou Login Web (Plus/Pro) para OpenAI e Gemini, abrindo a página oficial do provedor na pasta de dados correta, confirmando sessões já autenticadas e mantendo status claro. | ✅ Concluído |
+| **Login Híbrido (Web Login)**| Provedor | Permite alternar entre BYOK (API Keys) ou Login Web (Plus/Pro) para OpenAI e Gemini. | ❌ Removido (v0.0.29) |
 | **Anthropic Claude** | Provedor | Suporte nativo aos modelos Claude 3 Haiku e Claude 3.5 Sonnet. | ✅ Concluído |
 | **DeepSeek** | Provedor | Suporte nativo aos modelos DeepSeek Chat e Reasoning via chaves próprias (BYOK). | ✅ Concluído |
 | **Groq** | Provedor | Suporte nativo aos modelos Llama, Mixtral e Gemma na nuvem ultrarrápida da Groq via chaves próprias (BYOK). | ✅ Concluído |

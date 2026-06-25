@@ -12,7 +12,7 @@ Examples:
 
 ```text
 feat/chat-welcome-actions
-fix/web-login-empty-state
+fix/editor-selection-bug
 docs/release-process
 refactor/provider-session-handling
 ```
@@ -49,5 +49,5 @@ refactor/provider-session-handling
 * Choose the prefix based on the main branch goal.
 * Prefer one branch per work intention.
 * Avoid generic names such as `fix/adjustments`, `feat/new-stuff`, or `chore/misc`.
-* When there is a tracked issue or task, the identifier may be appended at the end: `fix/web-login-empty-state-123`.
+* When there is a tracked issue or task, the identifier may be appended at the end: `fix/editor-selection-bug-123`.
 * The branch prefix does not force every commit to use the same prefix, but history is clearer when both are aligned.

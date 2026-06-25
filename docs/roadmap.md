@@ -14,6 +14,18 @@ Este documento descreve o planejamento estratégico e a visão de futuro do assi
 Abaixo estão listadas as conquistas e os valores entregues em cada versão já lançada do plugin:
 
 <details>
+  <summary><b>📦 v0.0.29 — Correção de Seleção do Editor e Bloqueio do Gemini OAuth (Concluído)</b></summary>
+
+  *   **Valor Entregue**: Resolução de problemas críticos na detecção e reset de seleção ativa do editor de código no Delphi, tradução do indicador de digitação no chat para o inglês padrão e bloqueio preventivo temporário do fluxo Google Gemini OAuth por pendência de aprovação de segurança da Google.
+  *   **Destaques**:
+      *   Correção na detecção de seleção de texto usando `LView.Block` ao invés de `LEditBuffer.EditBlock` para refletir de forma precisa a ausência de seleção visível e acionar o fallback de explicar a unit inteira.
+      *   Reset e colapso programático do bloco de seleção do editor (`LEditBlock.Reset` e `LView.Position.Move`) após inserção de código automático para evitar que textos recém-gerados continuem marcados como selecionados.
+      *   Tradução da mensagem do indicador moderno de digitação no chat de `"Pensando..."` para `"Thinking..."` para total aderência às diretrizes de idioma do código-fonte e interface (en-US).
+      *   Implementação de barreiras preventivas de login e envio de prompts usando o Gemini no modo OAuth, exibindo avisos claros instruindo a usar API Keys devido ao status de verificação pendente, omitindo qualquer menção a "Web Login" (removido).
+  *   👉 *Veja os detalhes de implementação e testes no [Backlog Técnico (v0.0.29)](backlog.md#v0029--correção-de-seleção-do-editor-e-bloqueio-do-gemini-oauth-clique-para-expandir).*
+</details>
+
+<details>
   <summary><b>📦 v0.0.28 — Adapter da Open Tools API e Testes de Rede (Concluído)</b></summary>
 
   *   **Valor Entregue**: Desacoplamento da Open Tools API através de um novo design com Adapter (`IRadIAEditorAdapter`), permitindo a automação de testes do buffer do editor offline e a introdução de testes de rede contra travamentos na IDE do Delphi.

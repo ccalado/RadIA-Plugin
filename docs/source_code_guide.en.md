@@ -79,7 +79,7 @@ VCL forms and frames developed under the MVP (Model-View-Presenter) pattern.
 | [RadIA.UI.ConfigFrame.pas](file:///d:/Projetos/PluginDelphiIA/Source/UI/RadIA.UI.ConfigFrame.pas) | Physical View for configuration settings (API keys, endpoints, themes, limits). |
 | [RadIA.UI.ConfigPresenter.pas](file:///d:/Projetos/PluginDelphiIA/Source/UI/RadIA.UI.ConfigPresenter.pas) | Configuration Presenter. Loads and saves settings synchronously. |
 | [RadIA.UI.DiffForm.pas](file:///d:/Projetos/PluginDelphiIA/Source/UI/RadIA.UI.DiffForm.pas) | Side-by-side comparison screen (Smart Diff) with buttons to accept or reject the suggested refactoring. |
-| [RadIA.UI.WebLoginForm.pas](file:///d:/Projetos/PluginDelphiIA/Source/UI/RadIA.UI.WebLoginForm.pas) | Specific screen for authenticated Web Login workflows in internal browsers for ChatGPT Plus and Gemini Advanced. |
+
 
 ---
 
