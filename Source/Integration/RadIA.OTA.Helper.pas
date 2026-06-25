@@ -61,12 +61,12 @@ begin
     if ASelectedOnly then
     begin
       AText := LEditor.GetSelectedText;
-      Result := not AText.IsEmpty;
+      Result := not AText.Trim.IsEmpty;
     end
     else
     begin
       AText := LEditor.GetText;
-      Result := not AText.IsEmpty;
+      Result := not AText.Trim.IsEmpty;
     end;
   end;
 end;

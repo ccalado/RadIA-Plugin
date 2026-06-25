@@ -982,6 +982,9 @@ function showTransientStatus(text) {
 }
 
 let typingIndicatorEl = null;
+let typingTimerInterval = null;
+let typingStartTime = 0;
+
 function showTypingIndicator() {
   if (typingIndicatorEl) return;
 
@@ -995,11 +998,22 @@ function showTypingIndicator() {
   avatar.innerHTML = info.icon;
 
   const indicator = document.createElement('div');
-  indicator.classList.add('typing-indicator');
+  indicator.classList.add('typing-indicator-modern');
   indicator.innerHTML = `
-    <div class="typing-dot"></div>
-    <div class="typing-dot"></div>
-    <div class="typing-dot"></div>
+    <div class="typing-header">
+      <div class="typing-sparkle-container">
+        <svg class="typing-sparkle-icon" viewBox="0 0 24 24">
+          <path d="M12 2L14.7 9.3L22 12L14.7 14.7L12 22L9.3 14.7L2 12L9.3 9.3L12 2Z" fill="currentColor"/>
+        </svg>
+      </div>
+      <span class="typing-status-text">Thinking...</span>
+      <span class="typing-timer">0.0s</span>
+    </div>
+    <div class="typing-skeleton">
+      <div class="skeleton-line skeleton-short"></div>
+      <div class="skeleton-line"></div>
+      <div class="skeleton-line skeleton-medium"></div>
+    </div>
   `;
 
   wrapper.appendChild(avatar);
@@ -1007,9 +1021,23 @@ function showTypingIndicator() {
   chatContainer.appendChild(wrapper);
   chatContainer.scrollTop = chatContainer.scrollHeight;
   typingIndicatorEl = wrapper;
+
+  // Start real-time timer
+  typingStartTime = Date.now();
+  const timerEl = indicator.querySelector('.typing-timer');
+  typingTimerInterval = setInterval(() => {
+    if (timerEl) {
+      const elapsed = ((Date.now() - typingStartTime) / 1000).toFixed(1);
+      timerEl.textContent = `${elapsed}s`;
+    }
+  }, 100);
 }
 
 function hideTypingIndicator() {
+  if (typingTimerInterval) {
+    clearInterval(typingTimerInterval);
+    typingTimerInterval = null;
+  }
   if (typingIndicatorEl) {
     typingIndicatorEl.remove();
     typingIndicatorEl = null;

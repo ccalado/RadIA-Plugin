@@ -1,4 +1,4 @@
-﻿unit RadIA.UI.ChatPresenter;
+unit RadIA.UI.ChatPresenter;
 
 interface
 
@@ -756,7 +756,7 @@ begin
   if not Assigned(FTemplateManager) then
     Exit;
 
-  if not FView.GetActiveEditorText(LActiveCode, True) or LActiveCode.IsEmpty then
+  if not FView.GetActiveEditorText(LActiveCode, True) or LActiveCode.Trim.IsEmpty then
     FView.GetActiveEditorText(LActiveCode, False);
 
   LResolved := FTemplateManager.ResolveTemplate(ATemplateName, LActiveCode);
@@ -1706,7 +1706,7 @@ var
 
       if LActiveCode.IsEmpty then
       begin
-        if not FView.GetActiveEditorText(LActiveCode, True) or LActiveCode.IsEmpty then
+        if not FView.GetActiveEditorText(LActiveCode, True) or LActiveCode.Trim.IsEmpty then
           FView.GetActiveEditorText(LActiveCode, False);
       end;
 
