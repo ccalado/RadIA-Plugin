@@ -1,4 +1,4 @@
-﻿unit RadIA.UI.ConfigPresenter;
+unit RadIA.UI.ConfigPresenter;
 
 interface
 
@@ -652,6 +652,15 @@ var
   LAuthUrl, LTokenUrl, LClientId, LClientSecret: string;
   LPort: Word;
 begin
+  if SameText(AProviderName, 'Gemini') then
+  begin
+    FView.ShowMessageDialog(
+      'Google Gemini OAuth authentication is currently pending approval.' + sLineBreak +
+      'Please use an API Key for now.'
+    );
+    Exit;
+  end;
+
   if SameText(AProviderName, 'OpenAI') then
   begin
     LAuthUrl := 'https://auth.openai.com/oauth/authorize';

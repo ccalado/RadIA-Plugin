@@ -1055,6 +1055,16 @@ var
   LSessionId: string;
   HandleStreamCallback: TStreamChunkCallback;
 begin
+  LActiveProvider := FConfig.GetActiveProvider;
+  if SameText(LActiveProvider, 'Gemini') and SameText(FConfig.GetProviderAuthType('Gemini'), 'oauth') then
+  begin
+    FView.ShowMessageDialog(
+      'Google Gemini OAuth authentication is currently pending approval.' + sLineBreak +
+      'Please use an API Key for now.'
+    );
+    Exit;
+  end;
+
   if not CheckQuotaAvailability then
     Exit;
 

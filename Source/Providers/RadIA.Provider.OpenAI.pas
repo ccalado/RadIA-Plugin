@@ -46,7 +46,7 @@ implementation
 uses
   System.SysUtils, System.Classes, Winapi.Windows, System.Win.Registry,
   System.Generics.Collections, RadIA.Core.ProviderRegistry, RadIA.Core.Types,
-  System.SyncObjs, RadIA.Core.TokenUsage, RadIA.Core.Logger, RadIA.Core.Container;
+  RadIA.Core.TokenUsage, RadIA.Core.Logger, RadIA.Core.Container;
 
 { TRadIAOpenAIProvider }
 
