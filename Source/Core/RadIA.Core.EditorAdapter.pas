@@ -137,7 +137,9 @@ begin
   if Assigned(LEditBuffer) then
   begin
     LEditBlock := LEditBuffer.EditBlock;
-    if Assigned(LEditBlock) and (LEditBlock.Size > 0) then
+    if Assigned(LEditBlock) and (LEditBlock.Size > 0) and
+       ((LEditBlock.StartingColumn <> LEditBlock.EndingColumn) or
+        (LEditBlock.StartingRow <> LEditBlock.EndingRow)) then
       Result := LEditBlock.Text;
   end;
 end;
