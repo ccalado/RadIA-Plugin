@@ -1,4 +1,4 @@
-﻿unit RadIA.Core.Mediator;
+unit RadIA.Core.Mediator;
 
 { Implements the Mediator pattern to decouple IDE integration components
   (EditorHook, MessageViewHook) from the UI layer (ChatFrame, DockableForm).
@@ -19,9 +19,10 @@ uses  RadIA.Core.Interfaces;
 type
   TRadIAMediator = class(TInterfacedObject, IRadIAMediator)
   private
-    class var FInstance: TRadIAMediator;
     FOnRequestPrompt: TOnRequestPromptProc;
     FOnRequestDiff: TOnRequestDiffProc;
+    FAutoReplaceTarget: string;
+    class var FInstance: TRadIAMediator;
 
     constructor CreatePrivate;
   protected
@@ -42,6 +43,8 @@ type
     { Unregister (called on teardown) }
     procedure UnregisterPromptHandler;
     procedure UnregisterDiffHandler;
+
+    property AutoReplaceTarget: string read FAutoReplaceTarget write FAutoReplaceTarget;
   end;
 
 implementation
@@ -57,6 +60,7 @@ begin
   inherited Create;
   FOnRequestPrompt := nil;
   FOnRequestDiff   := nil;
+  FAutoReplaceTarget := '';
 end;
 
 function TRadIAMediator._AddRef: Integer;

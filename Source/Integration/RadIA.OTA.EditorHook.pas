@@ -1,4 +1,4 @@
-﻿unit RadIA.OTA.EditorHook;
+unit RadIA.OTA.EditorHook;
 
 interface
 
@@ -14,8 +14,6 @@ type
     FInstalled: Boolean;
     FIDENotifierIndex: Integer;
     FEditorNotifiers: TInterfaceList;
-    FCreateExampleInProgress: Boolean;
-    FCreateExampleService: IRadIAService;
     FIDEAdapter: IRadIAIDEAdapter;
     FMediator: IRadIAMediator;
     {$IFNDEF TESTS}
@@ -61,7 +59,6 @@ type
     procedure OnShowChatExecute(Sender: TObject);
 
     function BuildCreateExamplePrompt(const ASourceCode: string; const AContext: TMethodExampleContext): string;
-    procedure FinishCreateExampleRequest;
     function GetEditorCodeContext(out ACode: string; out AUsedSelection: Boolean): Boolean;
     procedure SendCommandToChat(const ACommand: string; const APromptPrefix: string);
     {$IFNDEF TESTS}
@@ -78,9 +75,6 @@ type
 
     procedure HookMenuDirectly(APopupMenu: TPopupMenu);
     procedure UnhookMenuDirectly(APopupMenu: TPopupMenu);
-    class function HasCodeFence(const ALines: TStrings): Boolean; static;
-    class procedure ExtractFenceContent(const ALines, AOutput: TStrings; const AHasFence: Boolean); static;
-    class function CleanCreateExampleResponse(const AResponse: string; const AIndent: string): string; static;
   end;
 
 implementation
@@ -91,11 +85,11 @@ uses
   Vcl.Dialogs,
   Winapi.Windows, ToolsAPI,
   RadIA.Core.Types,
-  RadIA.Core.Mediator, RadIA.Core.Config, RadIA.Core.TokenUsage,
+  RadIA.Core.Mediator,
   {$IFNDEF TESTS}
   RadIA.OTA.DockableForm,
   {$ENDIF}
-  RadIA.Core.Logger, RadIA.Core.Container, RadIA.Core.Service, RadIA.OTA.Adapter, RadIA.OTA.Helper;
+  RadIA.Core.Logger, RadIA.Core.Container, RadIA.OTA.Adapter, RadIA.OTA.Helper;
 
 const
   CEditorHookDelayMs = 2500;
@@ -126,8 +120,6 @@ begin
   FOldActiveFormChange := nil;
   FIDENotifierIndex := -1;
   FEditorNotifiers := TInterfaceList.Create;
-  FCreateExampleInProgress := False;
-  FCreateExampleService := nil;
   {$IFNDEF TESTS}
   FTimer := nil;
   FHookPending := False;
@@ -139,7 +131,6 @@ end;
 destructor TRadIAEditorHook.Destroy;
 begin
   Uninstall;
-  FCreateExampleService := nil;
   FEditorNotifiers.Free;
   inherited Destroy;
 end;
@@ -171,7 +162,7 @@ end;
 
 procedure TRadIAEditorHook.RestoreScreenOnActiveFormChange;
 begin
-  if Assigned(Screen) and (not GIsShuttingDown) then
+  if Assigned(Screen) then
   begin
     try
       Screen.OnActiveFormChange := FOldActiveFormChange;
@@ -186,7 +177,7 @@ procedure TRadIAEditorHook.UnhookAllForms;
 var
   I: Integer;
 begin
-  if Assigned(Screen) and (not GIsShuttingDown) then
+  if Assigned(Screen) then
   begin
     for I := 0 to Screen.FormCount - 1 do
     begin
@@ -208,18 +199,15 @@ begin
   if Assigned(FInterceptedMenus) then
   begin
     try
-      if not GIsShuttingDown then
+      for LMenu in FInterceptedMenus.Keys do
       begin
-        for LMenu in FInterceptedMenus.Keys do
-        begin
-          try
-            LOldOnPopup := FInterceptedMenus[LMenu];
-            LMenu.OnPopup := LOldOnPopup;
-            RemoveMenuFromPopupMenu(LMenu);
-          except
-            on E: Exception do
-              TLogger.Log('Uninstall: Error restoring popup menu: ' + E.Message, 'EditorHook');
-          end;
+        try
+          LOldOnPopup := FInterceptedMenus[LMenu];
+          LMenu.OnPopup := LOldOnPopup;
+          RemoveMenuFromPopupMenu(LMenu);
+        except
+          on E: Exception do
+            TLogger.Log('Uninstall: Error restoring popup menu: ' + E.Message, 'EditorHook');
         end;
       end;
     finally
@@ -801,16 +789,16 @@ begin
   LBuilder := TStringBuilder.Create;
   try
     LBuilder.AppendLine('You are generating Object Pascal code for ' + TRadIAOTAHelper.GetDelphiVersionName + '.');
-    LBuilder.AppendLine('Return only the statements that must be inserted inside the existing method body.');
-    LBuilder.AppendLine('Do not return the method signature, the outer begin/end, explanations, or Markdown ' +
-        'outside one pascal code block.');
+    LBuilder.AppendLine('Implement the method below completely. Return the complete method ' +
+        'declaration, including the method signature, ');
+    LBuilder.AppendLine('the local variable "var" block (if any local variables are needed) ' +
+        'immediately below the signature and before the "begin", ');
+    LBuilder.AppendLine('and the full method body enclosed in the main "begin/end;".');
+    LBuilder.AppendLine('Do not return explanations, markdown wrapper blocks outside of the ' +
+        'single Pascal code block, or separate declaration and implementation sections.');
     LBuilder.AppendLine('Use only symbols already available in the full unit context whenever possible.');
     LBuilder.AppendLine('Do not introduce dependencies that require changing the unit uses clause unless ' +
         'there is no practical alternative.');
-    LBuilder.AppendLine('Use inline local variable declarations only if they are necessary and compatible ' +
-        'with Delphi 10.3 or newer. Remember that Delphi inline variables must be declared individually, ' +
-        'each on its own line prefixed with the "var" keyword (e.g., "var LVar: Type;"). ' +
-        'Do not group multiple variables under a single "var" block inside begin..end.');
     {$IF CompilerVersion >= 36.0}
     LBuilder.AppendLine('You can use multiline string literals (surrounded by triple single ' +
         'quotes ''''''texto'''''') for long strings or formatting blocks.');
@@ -839,134 +827,7 @@ begin
   end;
 end;
 
-class function TRadIAEditorHook.HasCodeFence(const ALines: TStrings): Boolean;
-var
-  I: Integer;
-begin
-  Result := False;
-  for I := 0 to ALines.Count - 1 do
-  begin
-    if ALines[I].Trim.StartsWith('```') then
-      Exit(True);
-  end;
-end;
 
-class procedure TRadIAEditorHook.ExtractFenceContent(const ALines, AOutput: TStrings; const AHasFence: Boolean);
-var
-  I: Integer;
-  LLine, LTrimmed: string;
-  LInFence, LFoundFence: Boolean;
-begin
-  LInFence := False;
-  LFoundFence := False;
-  for I := 0 to ALines.Count - 1 do
-  begin
-    LLine := ALines[I];
-    LTrimmed := LLine.Trim;
-    if LTrimmed.StartsWith('```') then
-    begin
-      if not LInFence then
-      begin
-        LInFence := True;
-        LFoundFence := True;
-        Continue;
-      end;
-      Break;
-    end;
-
-    if (AHasFence and LInFence) or ((not AHasFence) and (not LFoundFence)) then
-      AOutput.Add(LLine);
-  end;
-end;
-
-class function TRadIAEditorHook.CleanCreateExampleResponse(const AResponse: string; const AIndent: string): string;
-var
-  LLines: TStringList;
-  LOutput: TStringList;
-  I: Integer;
-  LHasFence: Boolean;
-  LMinIndent: Integer;
-  LIndentCount: Integer;
-
-  function CountLeadingWhitespace(const ALine: string): Integer;
-  var
-    LIndex: Integer;
-  begin
-    Result := 0;
-    for LIndex := Low(ALine) to High(ALine) do
-    begin
-      if not CharInSet(ALine[LIndex], [' ', #9]) then
-        Exit;
-      Inc(Result);
-    end;
-  end;
-
-  function RemoveLeadingWhitespace(const ALine: string; const ACount: Integer): string;
-  var
-    LIndex: Integer;
-    LRemoved: Integer;
-  begin
-    LIndex := Low(ALine);
-    LRemoved := 0;
-    while (LIndex <= High(ALine)) and (LRemoved < ACount) and CharInSet(ALine[LIndex], [' ', #9]) do
-    begin
-      Inc(LIndex);
-      Inc(LRemoved);
-    end;
-
-    Result := Copy(ALine, LIndex, MaxInt);
-  end;
-
-begin
-  Result := '';
-  LLines := TStringList.Create;
-  LOutput := TStringList.Create;
-  try
-    LLines.Text := AResponse;
-
-    LHasFence := HasCodeFence(LLines);
-    ExtractFenceContent(LLines, LOutput, LHasFence);
-
-    while (LOutput.Count > 0) and LOutput[0].Trim.IsEmpty do
-      LOutput.Delete(0);
-
-    while (LOutput.Count > 0) and LOutput[LOutput.Count - 1].Trim.IsEmpty do
-      LOutput.Delete(LOutput.Count - 1);
-
-    LMinIndent := MaxInt;
-    for I := 0 to LOutput.Count - 1 do
-    begin
-      if LOutput[I].Trim.IsEmpty then
-        Continue;
-
-      LIndentCount := CountLeadingWhitespace(LOutput[I]);
-      if LIndentCount < LMinIndent then
-        LMinIndent := LIndentCount;
-    end;
-
-    if LMinIndent = MaxInt then
-      Exit('');
-
-    for I := 0 to LOutput.Count - 1 do
-    begin
-      if LOutput[I].Trim.IsEmpty then
-        LOutput[I] := ''
-      else
-        LOutput[I] := AIndent + RemoveLeadingWhitespace(LOutput[I], LMinIndent);
-    end;
-
-    Result := LOutput.Text.TrimRight;
-  finally
-    LOutput.Free;
-    LLines.Free;
-  end;
-end;
-
-procedure TRadIAEditorHook.FinishCreateExampleRequest;
-begin
-  FCreateExampleInProgress := False;
-  FCreateExampleService := nil;
-end;
 
 procedure TRadIAEditorHook.OnCreateExampleExecute(Sender: TObject);
 var
@@ -975,15 +836,7 @@ var
   LContext: TMethodExampleContext;
   LErrorMessage: string;
   LPrompt: string;
-  LConfig: IRadIAConfig;
 begin
-  if FCreateExampleInProgress then
-  begin
-    ShowMessage('Create Example from Comment is already generating code. Please wait for the current ' +
-        'request to finish.');
-    Exit;
-  end;
-
   if not FIDEAdapter.GetActiveEditorText(LSourceCode, False) then
   begin
     TLogger.Log('OnCreateExampleExecute failed: no active code', 'EditorHook');
@@ -999,59 +852,12 @@ begin
     Exit;
   end;
 
-  if not TRadIAContainer.TryResolve<IRadIAConfig>(LConfig) then
-  begin
-    LConfig := TRadIAConfig.GetInstance;
-    LConfig.Load;
-  end;
-
   LPrompt := BuildCreateExamplePrompt(LSourceCode, LContext);
-  TLogger.Log(Format('OnCreateExampleExecute: PromptLength=%d InsertLine=%d',
-    [Length(LPrompt), LContext.InsertionLine]), 'EditorHook');
+  TLogger.Log(Format('OnCreateExampleExecute: PromptLength=%d', [Length(LPrompt)]), 'EditorHook');
 
-  FCreateExampleInProgress := True;
-  if not TRadIAContainer.TryResolve<IRadIAService>(FCreateExampleService) then
-    FCreateExampleService := TRadIAService.Create(LConfig);
-  try
-    FCreateExampleService.SendPrompt(LPrompt, [],
-      procedure(const AResponse: string; const AError: string; AFromCache: Boolean; const AUsage: TTokenUsage)
-      var
-        LCode: string;
-      begin
-        try
-          if not AError.IsEmpty then
-          begin
-            TLogger.Log('OnCreateExampleExecute provider error: ' + AError, 'EditorHook');
-            ShowMessage('Error creating example: ' + AError);
-            Exit;
-          end;
-
-          LCode := CleanCreateExampleResponse(AResponse, LContext.BodyIndent);
-          if LCode.Trim.IsEmpty then
-          begin
-            TLogger.Log('OnCreateExampleExecute failed: empty generated code', 'EditorHook');
-            ShowMessage('The AI provider returned no code to insert.');
-            Exit;
-          end;
-
-          if not FIDEAdapter.InsertTextAtLineColumn(LCode + sLineBreak, LContext.InsertionLine,
-              LContext.InsertionColumn) then
-          begin
-            TLogger.Log('OnCreateExampleExecute failed: insert operation returned false', 'EditorHook');
-            ShowMessage('Could not insert the generated example into the active editor.');
-          end;
-        finally
-          FinishCreateExampleRequest;
-        end;
-      end, rpRefactorCode);
-  except
-    on E: Exception do
-    begin
-      TLogger.Log('OnCreateExampleExecute failed to start request: ' + E.Message, 'EditorHook');
-      FinishCreateExampleRequest;
-      ShowMessage('Could not start Create Example from Comment: ' + E.Message);
-    end;
-  end;
+  TRadIAMediator.Instance.AutoReplaceTarget := LContext.MethodText;
+  ShowRadIAChat;
+  FMediator.RequestPrompt(LPrompt, True);
 end;
 
 procedure TRadIAEditorHook.OnTestsExecute(Sender: TObject);

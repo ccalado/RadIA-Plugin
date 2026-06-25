@@ -1,9 +1,9 @@
-unit RadIA.UI.ChatPresenter;
+﻿unit RadIA.UI.ChatPresenter;
 
 interface
 
 uses
-  System.SysUtils, System.Classes, System.JSON, RadIA.Core.Interfaces,
+  System.SysUtils, System.Classes, System.JSON, System.Generics.Collections, RadIA.Core.Interfaces,
   RadIA.Core.Sessions, RadIA.Core.PromptTemplates,
   RadIA.Core.TokenUsage, RadIA.Core.PromptHistory, RadIA.Core.Types;
 
@@ -27,7 +27,8 @@ type
     procedure FocusPromptInput;
 
     function GetActiveEditorText(out ACode: string; const AOnlySelected: Boolean): Boolean;
-    procedure ReplaceActiveEditorText(const ACode: string);
+    procedure ReplaceActiveEditorText(const ACode: string; const AReplaceWholeBuffer: Boolean = False;
+      const AOriginalText: string = '');
 
     procedure ShowMessageDialog(const AMessage: string);
     function SaveDialogExecute(out AFileName: string): Boolean;
@@ -58,6 +59,7 @@ type
     FCancelledByUser: Boolean;
     FLoadingConfig: Boolean;
     FWebViewReady: Boolean;
+    FPendingWebMessages: TList<string>;
     FWebFilesDir: string;
     FLifecycleGuard: IInterface;
     FActiveModels: TArray<string>;
@@ -196,7 +198,8 @@ uses
   System.IOUtils, System.StrUtils, RadIA.Core.Config, RadIA.Core.Logger,
   RadIA.Core.ProviderRegistry, RadIA.Core.ConversationExporter,
   RadIA.Core.DTO.Generator, RadIA.Core.ProjectGenerator,
-  System.SyncObjs, RadIA.Core.Container, RadIA.Core.ChatMessage, RadIA.Core.Service;
+  System.SyncObjs, RadIA.Core.Container, RadIA.Core.ChatMessage, RadIA.Core.Service,
+  RadIA.Core.Mediator, RadIA.OTA.Helper;
 
 { Helper Functions }
 
@@ -224,6 +227,7 @@ begin
   FCancelledByUser := False;
   FLoadingConfig := False;
   FWebViewReady := False;
+  FPendingWebMessages := TList<string>.Create;
   FLifecycleGuard := TLifecycleGuard.Create;
   FActiveModels := [];
   FPendingPrompt := '';
@@ -293,6 +297,7 @@ begin
   FPromptHistoryManager.Free;
   FTemplateManager.Free;
   FSessionManager.Free;
+  FPendingWebMessages.Free;
 
   if FOwnsService and Assigned(FAIService) then
     FAIService := nil;
@@ -907,7 +912,7 @@ begin
     LStats := Self.FAccumulatedUsage.FormatStats;
     if Self.FConfig.QuotaEnabled and (not Self.FConfig.IsWebLoginProvider(AActiveProvider)) then
     begin
-      LStats := LStats + Format(' · Quota %d%%',
+      LStats := LStats + Format(' Â· Quota %d%%',
         [Round((Self.FConfig.QuotaUsed / Self.FConfig.QuotaLimit) * 100)]);
     end;
 
@@ -950,6 +955,9 @@ end;
 
 procedure TRadIAChatPresenter.ProcessStreamChunk(const ACtx: TStreamChunkCtx;
   var ADoneHandled: Boolean; var AFullResponse: string);
+var
+  LReplaceTarget: string;
+  LCode: string;
 begin
   if ADoneHandled then
     Exit;
@@ -988,6 +996,19 @@ begin
   begin
     ADoneHandled := True;
     Self.HandleStreamDone(FPendingPrompt, ACtx.ActiveProvider, ACtx.ActiveModel, AFullResponse);
+
+    if not TRadIAMediator.Instance.AutoReplaceTarget.IsEmpty then
+    begin
+      LReplaceTarget := TRadIAMediator.Instance.AutoReplaceTarget;
+      TRadIAMediator.Instance.AutoReplaceTarget := '';
+
+      LCode := TRadIAOTAHelper.CleanCodeResponse(AFullResponse, '');
+      if not LCode.IsEmpty then
+      begin
+        TLogger.Log('ProcessStreamChunk: Auto-replacing target method in editor.', 'UI');
+        FView.ReplaceActiveEditorText(LCode, False, LReplaceTarget);
+      end;
+    end;
   end;
 end;
 
@@ -1133,7 +1154,7 @@ begin
       Self.FConfig.AddToQuotaUsage(LUsage);
     LStats := Self.FAccumulatedUsage.FormatStats;
     if Self.FConfig.QuotaEnabled and (not Self.FConfig.IsWebLoginProvider(AActiveProvider)) then
-      LStats := LStats + Format(' · Quota %d%%',
+      LStats := LStats + Format(' Â· Quota %d%%',
         [Round((Self.FConfig.QuotaUsed / Self.FConfig.QuotaLimit) * 100)]);
     Self.PostToWebView('update_tokens', '', LStats);
   end;
@@ -1222,18 +1243,24 @@ end;
 
 
 procedure TRadIAChatPresenter.OnWebViewReady;
+var
+  LMsgStr: string;
 begin
   FWebViewReady := True;
   FView.ApplyCurrentTheme;
   SendInitialConfigToWeb;
+
+  for LMsgStr in FPendingWebMessages do
+  begin
+    FView.PostMessageToWeb(LMsgStr);
+  end;
+  FPendingWebMessages.Clear;
 
   if FRequestInProgress then
   begin
     FView.SetRequestState(True);
     PostToWebView('show_typing', '', '');
   end;
-
-
 end;
 
 procedure TRadIAChatPresenter.QueueOnUI(const AProcedure: TProc);
@@ -1811,15 +1838,9 @@ var
   LJson: TJSONObject;
   LDisplayModel: string;
 begin
-  if not FWebViewReady then
-    Exit;
-
   LDisplayModel := AModel;
   if (not AProvider.IsEmpty) and FConfig.IsWebLoginProvider(AProvider) then
     LDisplayModel := 'Web Login';
-
-  TLogger.Log(Format('PostToWebView: Action=%s, Role=%s, TextLen=%d, IsDone=%s, Provider=%s, Model=%s',
-    [AAction, ARole, Length(AText), BoolToStr(AIsDone, True), AProvider, LDisplayModel]), 'UI');
 
   LJson := TJSONObject.Create;
   try
@@ -1833,6 +1854,15 @@ begin
       LJson.AddPair('provider', AProvider);
     if not LDisplayModel.IsEmpty then
       LJson.AddPair('model', LDisplayModel);
+
+    if not FWebViewReady then
+    begin
+      FPendingWebMessages.Add(LJson.ToJSON);
+      Exit;
+    end;
+
+    TLogger.Log(Format('PostToWebView: Action=%s, Role=%s, TextLen=%d, IsDone=%s, Provider=%s, Model=%s',
+      [AAction, ARole, Length(AText), BoolToStr(AIsDone, True), AProvider, LDisplayModel]), 'UI');
 
     FView.PostMessageToWeb(LJson.ToJSON);
   finally

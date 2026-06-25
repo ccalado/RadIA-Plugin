@@ -1,11 +1,10 @@
-﻿unit RadIA.UI.ChatFrame;
+unit RadIA.UI.ChatFrame;
 
 interface
 
 uses  Winapi.Messages, System.SysUtils, System.Classes,
   Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
-  Vcl.Edge, Winapi.WebView2,
-  Vcl.Menus, Vcl.Buttons, RadIA.Core.Sessions, RadIA.UI.Resources,
+  Vcl.Edge, Vcl.Menus, Vcl.Buttons, RadIA.Core.Sessions, RadIA.UI.Resources,
   RadIA.UI.ChatPresenter;
 
 type
@@ -107,7 +106,8 @@ type
     procedure FocusPromptInput;
 
     function GetActiveEditorText(out ACode: string; const AOnlySelected: Boolean): Boolean;
-    procedure ReplaceActiveEditorText(const ACode: string);
+    procedure ReplaceActiveEditorText(const ACode: string; const AReplaceWholeBuffer: Boolean = False;
+      const AOriginalText: string = '');
 
     procedure ShowMessageDialog(const AMessage: string);
     function SaveDialogExecute(out AFileName: string): Boolean;
@@ -120,16 +120,10 @@ implementation
 uses
   System.IOUtils, System.JSON, ToolsAPI, RadIA.OTA.Helper, RadIA.UI.ConfigForm,
   RadIA.Core.Mediator, RadIA.Core.Logger, RadIA.Core.Container,
-  Winapi.ActiveX, RadIA.Core.ProviderRegistry, RadIA.Core.Types, Winapi.Windows, RadIA.Core.Interfaces;
+  Winapi.ActiveX, RadIA.Core.ProviderRegistry, RadIA.Core.Types, Winapi.Windows,
+  RadIA.Core.Interfaces, Winapi.WebView2;
 
 {$R *.dfm}
-
-type
-  ICoreWebView2Settings2_Local = interface(IUnknown)
-    ['{ee9a0f68-f96c-4e24-9c00-fd6c778988b4}']
-    function Get_UserAgent(out AUserAgent: PWideChar): HRESULT; stdcall;
-    function Put_UserAgent(AUserAgent: PWideChar): HRESULT; stdcall;
-  end;
 
 const
   CWebViewScrollbarStyleId = 'radia-scrollbar-style';
@@ -366,12 +360,7 @@ begin
     LEdgeToFree.Parent := nil;
     if not GIsShuttingDown then
     begin
-      TThread.Queue(nil,
-        TThreadProcedure(
-        procedure
-        begin
-          LEdgeToFree.Free;
-        end));
+      LEdgeToFree.Free;
     end;
   end;
 
@@ -927,9 +916,10 @@ begin
   Result := TRadIAOTAHelper.GetActiveEditorText(ACode, AOnlySelected);
 end;
 
-procedure TRadIAFrameAIChat.ReplaceActiveEditorText(const ACode: string);
+procedure TRadIAFrameAIChat.ReplaceActiveEditorText(const ACode: string; const AReplaceWholeBuffer: Boolean;
+  const AOriginalText: string);
 begin
-  TRadIAOTAHelper.ReplaceActiveEditorText(ACode);
+  TRadIAOTAHelper.ReplaceActiveEditorText(ACode, AReplaceWholeBuffer, AOriginalText);
 end;
 
 procedure TRadIAFrameAIChat.ShowMessageDialog(const AMessage: string);

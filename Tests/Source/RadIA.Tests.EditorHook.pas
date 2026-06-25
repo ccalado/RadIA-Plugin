@@ -41,7 +41,7 @@ type
 implementation
 
 uses
-  System.Classes;
+  System.Classes, RadIA.OTA.Helper;
 
 { TTestEditorHook }
 
@@ -158,7 +158,7 @@ procedure TTestEditorHook.TestCleanCreateExampleResponseWithPascalFence;
 var
   LCleaned: string;
 begin
-  LCleaned := TRadIAEditorHook.CleanCreateExampleResponse(
+  LCleaned := TRadIAOTAHelper.CleanCodeResponse(
     '```pascal' + sLineBreak +
     'Result := True;' + sLineBreak +
     '```', '  ');
@@ -170,7 +170,7 @@ procedure TTestEditorHook.TestCleanCreateExampleResponseWithoutFence;
 var
   LCleaned: string;
 begin
-  LCleaned := TRadIAEditorHook.CleanCreateExampleResponse(
+  LCleaned := TRadIAOTAHelper.CleanCodeResponse(
     'Result := True;' + sLineBreak +
     'Exit;', '    ');
 
@@ -181,7 +181,7 @@ procedure TTestEditorHook.TestCleanCreateExampleResponseIgnoresTextOutsideFence;
 var
   LCleaned: string;
 begin
-  LCleaned := TRadIAEditorHook.CleanCreateExampleResponse(
+  LCleaned := TRadIAOTAHelper.CleanCodeResponse(
     'Here is the code:' + sLineBreak +
     '```pascal' + sLineBreak +
     '  Result := True;' + sLineBreak +

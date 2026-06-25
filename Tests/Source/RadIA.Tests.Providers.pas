@@ -38,6 +38,18 @@ type
     procedure TestClaudeResponseParsing;
     [Test]
     procedure TestGenericProvider_Create;
+    [Test]
+    procedure TestOpenAI_ProcessCodexJsonLine;
+    [Test]
+    procedure TestOpenAI_ReadCodexOutputPipe;
+    [Test]
+    procedure TestOpenAI_RunCodexLoop_FailurePath;
+    [Test]
+    procedure TestOpenAI_RunCodexLoop_SuccessPath;
+    [Test]
+    procedure TestOpenAI_SendPromptAsync_OAuth_CodexNotFound;
+    [Test]
+    procedure TestOpenAI_SendPromptStreamAsync_OAuth_CodexNotFound;
   end;
 
   [TestFixture]
@@ -56,7 +68,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Rtti, System.JSON,
+  Winapi.Windows, System.Classes, System.SysUtils, System.Rtti, System.JSON,
   RadIA.Tests.Service, RadIA.Core.ChatMessage, RadIA.Provider.Generic,
   RadIA.Core.SettingsStorage, RadIA.Core.Types, RadIA.Core.Config;
 
@@ -322,6 +334,256 @@ begin
   finally
     TRadIAConfig.SetStorage(TRadIAMemorySettingsStorage.Create);
   end;
+end;
+
+procedure TTestRadIAProviders.TestOpenAI_ProcessCodexJsonLine;
+var
+  LContext: TRttiContext;
+  LType: TRttiInstanceType;
+  LMethod: TRttiMethod;
+  LParams: TArray<TValue>;
+  LDelta: string;
+  LResponse: string;
+  LInputTokens, LOutputTokens: Integer;
+begin
+  LContext := TRttiContext.Create;
+  LType := LContext.GetType(TRadIAOpenAIProvider) as TRttiInstanceType;
+  LMethod := LType.GetMethod('ProcessCodexJsonLine');
+  Assert.IsNotNull(LMethod, 'ProcessCodexJsonLine method must exist');
+
+  // Test Case 1: thread.started
+  SetLength(LParams, 5);
+  LParams[0] := '{"type": "thread.started", "thread_id": "thread_123"}';
+  LParams[1] := ''; // out ADeltaText
+  LParams[2] := ''; // var AResponseText
+  LParams[3] := 0;  // var AInputTokens
+  LParams[4] := 0;  // var AOutputTokens
+
+  LMethod.Invoke(FOpenAIProv, LParams);
+
+  // Test Case 2: message.delta
+  LParams[0] := '{"type": "message.delta", "delta": {"content": ' +
+    '[{"type": "text", "text": {"value": "hello"}}]}}';
+  LParams[1] := '';
+  LParams[2] := 'response_so_far';
+  LParams[3] := 0;
+  LParams[4] := 0;
+
+  LMethod.Invoke(FOpenAIProv, LParams);
+  LDelta := LParams[1].AsString;
+  Assert.AreEqual('hello', LDelta);
+
+  // Test Case 3: item.completed
+  LParams[0] := '{"type": "item.completed", "item": {"text": "final response text"}}';
+  LParams[1] := '';
+  LParams[2] := '';
+  LParams[3] := 0;
+  LParams[4] := 0;
+
+  LMethod.Invoke(FOpenAIProv, LParams);
+  LResponse := LParams[2].AsString;
+  Assert.AreEqual('final response text', LResponse);
+
+  // Test Case 4: turn.completed
+  LParams[0] := '{"type": "turn.completed", "usage": {"input_tokens": 10, "output_tokens": 20}}';
+  LParams[1] := '';
+  LParams[2] := '';
+  LParams[3] := 0;
+  LParams[4] := 0;
+
+  LMethod.Invoke(FOpenAIProv, LParams);
+  LInputTokens := LParams[3].AsInteger;
+  LOutputTokens := LParams[4].AsInteger;
+  Assert.AreEqual(10, LInputTokens);
+  Assert.AreEqual(20, LOutputTokens);
+end;
+
+procedure TTestRadIAProviders.TestOpenAI_ReadCodexOutputPipe;
+var
+  LContext: TRttiContext;
+  LType: TRttiInstanceType;
+  LMethod: TRttiMethod;
+  LHRead, LHWrite: THandle;
+  LSa: TSecurityAttributes;
+  LResponse: string;
+  LBytesWritten: DWORD;
+  LData: RawByteString;
+  LInvokeParams: TArray<TValue>;
+begin
+  LSa.nLength := SizeOf(TSecurityAttributes);
+  LSa.bInheritHandle := True;
+  LSa.lpSecurityDescriptor := nil;
+
+  if not CreatePipe(LHRead, LHWrite, @LSa, 0) then
+    Assert.Fail('Failed to create pipe for test');
+
+  try
+    LData := '{"type": "message.delta", "delta": {"content": [{"type": "text", "text": {"value": "part1"}}]}}' + #10 +
+             '{"type": "message.delta", "delta": {"content": [{"type": "text", "text": {"value": "part2"}}]}}' + #10;
+    WriteFile(LHWrite, LData[1], Length(LData), LBytesWritten, nil);
+    CloseHandle(LHWrite);
+
+    LContext := TRttiContext.Create;
+    LType := LContext.GetType(TRadIAOpenAIProvider) as TRttiInstanceType;
+    LMethod := LType.GetMethod('ReadCodexOutputPipe');
+    Assert.IsNotNull(LMethod, 'ReadCodexOutputPipe method must exist');
+
+    SetLength(LInvokeParams, 6);
+    LInvokeParams[0] := LHRead;
+    LInvokeParams[1] := False; // AIsStream
+    LInvokeParams[2] := TValue.From<TStreamChunkCallback>(nil);
+    LInvokeParams[3] := ''; // var AResponseText
+    LInvokeParams[4] := 0; // var AInputTokens
+    LInvokeParams[5] := 0; // var AOutputTokens
+
+    LMethod.Invoke(FOpenAIProv, LInvokeParams);
+
+    LResponse := LInvokeParams[3].AsString;
+    Assert.AreEqual('part1part2', LResponse);
+  finally
+    CloseHandle(LHRead);
+  end;
+end;
+
+procedure TTestRadIAProviders.TestOpenAI_RunCodexLoop_FailurePath;
+var
+  LContext: TRttiContext;
+  LType: TRttiInstanceType;
+  LMethod: TRttiMethod;
+  LInvokeParams: TArray<TValue>;
+  LCallbackCalled: Boolean;
+begin
+  LContext := TRttiContext.Create;
+  LType := LContext.GetType(TRadIAOpenAIProvider) as TRttiInstanceType;
+  LMethod := LType.GetMethod('RunCodexLoop');
+  Assert.IsNotNull(LMethod, 'RunCodexLoop method must exist');
+
+  LCallbackCalled := False;
+
+  SetLength(LInvokeParams, 5);
+  LInvokeParams[0] := 'invalid_codex_cli_executable_name.exe';
+  LInvokeParams[1] := 'test prompt';
+  LInvokeParams[2] := TValue.From<TCompletionCallback>(
+    procedure(const AResponse: string; const AError: string; AFromCache: Boolean; const AUsage: TTokenUsage)
+    begin
+      LCallbackCalled := True;
+      Assert.IsFalse(AFromCache);
+      Assert.Contains(AError, 'Failed to create the Codex process');
+    end
+  );
+  LInvokeParams[3] := TValue.From<TStreamChunkCallback>(nil);
+  LInvokeParams[4] := False;
+
+  LMethod.Invoke(FOpenAIProv, LInvokeParams);
+
+  CheckSynchronize(1000);
+
+  Assert.IsTrue(LCallbackCalled, 'Callback should have been executed via thread queue');
+end;
+
+procedure TTestRadIAProviders.TestOpenAI_RunCodexLoop_SuccessPath;
+var
+  LContext: TRttiContext;
+  LType: TRttiInstanceType;
+  LMethod: TRttiMethod;
+  LInvokeParams: TArray<TValue>;
+  LCallbackCalled: Boolean;
+  LCmdLine: string;
+begin
+  LContext := TRttiContext.Create;
+  LType := LContext.GetType(TRadIAOpenAIProvider) as TRttiInstanceType;
+  LMethod := LType.GetMethod('RunCodexLoop');
+  Assert.IsNotNull(LMethod, 'RunCodexLoop method must exist');
+
+  LCallbackCalled := False;
+  LCmdLine := 'cmd.exe /c echo {"type": "item.completed", "item": {"text": "hello from cmd"}}';
+
+  SetLength(LInvokeParams, 5);
+  LInvokeParams[0] := LCmdLine;
+  LInvokeParams[1] := 'test prompt';
+  LInvokeParams[2] := TValue.From<TCompletionCallback>(
+    procedure(const AResponse: string; const AError: string; AFromCache: Boolean; const AUsage: TTokenUsage)
+    begin
+      LCallbackCalled := True;
+      Assert.IsTrue(AFromCache);
+      Assert.AreEqual('hello from cmd', AResponse);
+    end
+  );
+  LInvokeParams[3] := TValue.From<TStreamChunkCallback>(nil);
+  LInvokeParams[4] := False;
+
+  LMethod.Invoke(FOpenAIProv, LInvokeParams);
+
+  CheckSynchronize(2000);
+
+  Assert.IsTrue(LCallbackCalled, 'Completion callback should have been executed');
+end;
+
+procedure TTestRadIAProviders.TestOpenAI_SendPromptAsync_OAuth_CodexNotFound;
+var
+  LCallbackCalled: Boolean;
+  I: Integer;
+begin
+  LCallbackCalled := False;
+  FConfig.SetProviderAuthType('OpenAI', 'oauth');
+  FConfig.SetActiveModel('OpenAI', 'gpt-5.4');
+
+  FOpenAIProv.SendPromptAsync(
+    'test prompt',
+    [],
+    procedure(const AResponse: string; const AError: string; AFromCache: Boolean; const AUsage: TTokenUsage)
+    begin
+      LCallbackCalled := True;
+      Assert.IsNotEmpty(AError);
+    end,
+    0.7,
+    1000
+  );
+
+  for I := 1 to 50 do
+  begin
+    CheckSynchronize(100);
+    if LCallbackCalled then
+      Break;
+    Sleep(100);
+  end;
+
+  Assert.IsTrue(LCallbackCalled, 'Callback should be called');
+end;
+
+procedure TTestRadIAProviders.TestOpenAI_SendPromptStreamAsync_OAuth_CodexNotFound;
+var
+  LCallbackCalled: Boolean;
+  I: Integer;
+begin
+  LCallbackCalled := False;
+  FConfig.SetProviderAuthType('OpenAI', 'oauth');
+  FConfig.SetActiveModel('OpenAI', 'gpt-5.4');
+
+  FOpenAIProv.SendPromptStreamAsync(
+    'test prompt',
+    [],
+    procedure(const AChunk: string; const AIsDone: Boolean; const AError: string)
+    begin
+      if AIsDone then
+      begin
+        LCallbackCalled := True;
+        Assert.IsNotEmpty(AError);
+      end;
+    end,
+    0.7,
+    1000
+  );
+
+  for I := 1 to 50 do
+  begin
+    CheckSynchronize(100);
+    if LCallbackCalled then
+      Break;
+    Sleep(100);
+  end;
+
+  Assert.IsTrue(LCallbackCalled, 'Stream callback should be called');
 end;
 
 

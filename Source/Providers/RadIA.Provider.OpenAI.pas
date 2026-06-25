@@ -1,8 +1,8 @@
-﻿unit RadIA.Provider.OpenAI;
+unit RadIA.Provider.OpenAI;
 
 interface
 
-uses  RadIA.Core.Interfaces, RadIA.Provider.Base;
+uses  System.JSON, RadIA.Core.Interfaces, RadIA.Provider.Base;
 
 type
   {$RTTI EXPLICIT METHODS([vcPrivate, vcProtected, vcPublic, vcPublished])}
@@ -10,8 +10,19 @@ type
   private
     FThreadId: string;
     function GetCodexExecutablePath: string;
+    function ExtractDeltaText(const ADeltaObj: TJSONObject): string;
+    procedure WritePromptToPipe(AWriteHandle: THandle; const APrompt: string);
+    procedure ReadCodexOutputPipe(AReadHandle: THandle; const AIsStream: Boolean;
+      const AStreamCallback: TStreamChunkCallback; var AResponseText: string;
+      var AInputTokens, AOutputTokens: Integer);
+    procedure RunCodexLoop(const ACmdLine: string; const APrompt: string;
+      const ACallback: TCompletionCallback; const AStreamCallback: TStreamChunkCallback;
+      const AIsStream: Boolean);
+    procedure ProcessCodexJsonLine(const AJsonStr: string; out ADeltaText: string;
+      var AResponseText: string; var AInputTokens, AOutputTokens: Integer);
     procedure ExecuteCodexCli(const APrompt: string; const ACallback: TCompletionCallback;
       const AStreamCallback: TStreamChunkCallback; const AIsStream: Boolean);
+    function GetEffectiveSystemPrompt: string;
   protected
     function GetBaseUrl: string; override;
     function GetModelsDiscoveryUrl: string; override;
@@ -33,9 +44,9 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.JSON, Winapi.Windows, System.Win.Registry,
+  System.SysUtils, System.Classes, Winapi.Windows, System.Win.Registry,
   System.Generics.Collections, RadIA.Core.ProviderRegistry, RadIA.Core.Types,
-  RadIA.Core.TokenUsage;
+  System.SyncObjs, RadIA.Core.TokenUsage, RadIA.Core.Logger, RadIA.Core.Container;
 
 { TRadIAOpenAIProvider }
 
@@ -172,8 +183,385 @@ begin
   if FileExists(LPath) then
   begin
     Result := LPath;
+  end;
+end;
+
+function TRadIAOpenAIProvider.ExtractDeltaText(const ADeltaObj: TJSONObject): string;
+var
+  LContentArr: TJSONArray;
+  LContentObj: TJSONObject;
+  LTextObj: TJSONObject;
+begin
+  Result := '';
+  if not Assigned(ADeltaObj) then
+    Exit;
+
+  LContentArr := ADeltaObj.GetValue('content') as TJSONArray;
+  if Assigned(LContentArr) and (LContentArr.Count > 0) then
+  begin
+    LContentObj := LContentArr[0] as TJSONObject;
+    if Assigned(LContentObj) then
+    begin
+      LTextObj := LContentObj.GetValue('text') as TJSONObject;
+      if Assigned(LTextObj) then
+      begin
+        Result := LTextObj.GetValue<string>('value', '');
+      end;
+    end;
+  end;
+end;
+
+procedure TRadIAOpenAIProvider.WritePromptToPipe(AWriteHandle: THandle; const APrompt: string);
+var
+  LUtf8Prompt: RawByteString;
+  LBytesWritten: DWORD;
+begin
+  LUtf8Prompt := UTF8Encode(APrompt);
+  if Length(LUtf8Prompt) > 0 then
+  begin
+    WriteFile(AWriteHandle, LUtf8Prompt[1], Length(LUtf8Prompt), LBytesWritten, nil);
+  end;
+  CloseHandle(AWriteHandle);
+end;
+
+procedure ProcessThreadStarted(LJson: TJSONObject; var AThreadId: string);
+begin
+  AThreadId := LJson.GetValue<string>('thread_id', '');
+end;
+
+function ProcessMessageDelta(LJson: TJSONObject; AProvider: TRadIAOpenAIProvider): string;
+var
+  LDeltaObj: TJSONObject;
+begin
+  Result := '';
+  LDeltaObj := LJson.GetValue('delta') as TJSONObject;
+  if Assigned(LDeltaObj) then
+    Result := AProvider.ExtractDeltaText(LDeltaObj);
+end;
+
+procedure ProcessItemCompleted(LJson: TJSONObject; var AResponseText: string);
+var
+  LItemObj: TJSONObject;
+begin
+  LItemObj := LJson.GetValue('item') as TJSONObject;
+  if Assigned(LItemObj) then
+  begin
+    AResponseText := LItemObj.GetValue<string>('text', '');
+  end;
+end;
+
+procedure ProcessTurnCompleted(LJson: TJSONObject; var AInputTokens, AOutputTokens: Integer);
+var
+  LUsageObj: TJSONObject;
+begin
+  LUsageObj := LJson.GetValue('usage') as TJSONObject;
+  if Assigned(LUsageObj) then
+  begin
+    AInputTokens := LUsageObj.GetValue<Integer>('input_tokens', 0);
+    AOutputTokens := LUsageObj.GetValue<Integer>('output_tokens', 0);
+  end;
+end;
+
+procedure ProcessSingleCodexLine(const AJsonStr: string; AProvider: TRadIAOpenAIProvider;
+  const AIsStream: Boolean; const AStreamCallback: TStreamChunkCallback;
+  var AResponseText: string; var AInputTokens, AOutputTokens: Integer);
+var
+  LDeltaText: string;
+begin
+  if AJsonStr.IsEmpty then
+    Exit;
+
+  LDeltaText := '';
+  AProvider.ProcessCodexJsonLine(AJsonStr, LDeltaText, AResponseText, AInputTokens, AOutputTokens);
+  if not LDeltaText.IsEmpty then
+  begin
+    if AIsStream and not GIsShuttingDown then
+    begin
+      TThread.Queue(nil,
+        TThreadProcedure(
+        procedure
+        begin
+          if Assigned(AStreamCallback) then
+            AStreamCallback(LDeltaText, False, '');
+        end));
+    end;
+    AResponseText := AResponseText + LDeltaText;
+  end;
+end;
+
+function CreateCodexProcess(const ACmdLine: string; out AHReadOut, AHWriteIn: THandle;
+  out APi: TProcessInformation): Boolean;
+var
+  LSa: TSecurityAttributes;
+  LSi: TStartupInfo;
+  LHWriteOut, LHReadIn: THandle;
+begin
+  Result := False;
+  AHReadOut := 0;
+  AHWriteIn := 0;
+  ZeroMemory(@APi, SizeOf(TProcessInformation));
+
+  LSa.nLength := SizeOf(TSecurityAttributes);
+  LSa.bInheritHandle := True;
+  LSa.lpSecurityDescriptor := nil;
+
+  if not CreatePipe(AHReadOut, LHWriteOut, @LSa, 0) then Exit;
+  if not CreatePipe(LHReadIn, AHWriteIn, @LSa, 0) then
+  begin
+    CloseHandle(AHReadOut);
+    CloseHandle(LHWriteOut);
     Exit;
   end;
+
+  SetHandleInformation(AHReadOut, HANDLE_FLAG_INHERIT, 0);
+  SetHandleInformation(AHWriteIn, HANDLE_FLAG_INHERIT, 0);
+
+  ZeroMemory(@LSi, SizeOf(TStartupInfo));
+  LSi.cb := SizeOf(TStartupInfo);
+  LSi.dwFlags := STARTF_USESTDHANDLES or STARTF_USESHOWWINDOW;
+  LSi.wShowWindow := SW_HIDE;
+  LSi.hStdOutput := LHWriteOut;
+  LSi.hStdError := LHWriteOut;
+  LSi.hStdInput := LHReadIn;
+
+  if CreateProcess(nil, PChar(ACmdLine), nil, nil, True,
+    CREATE_NO_WINDOW, nil, nil, LSi, APi) then
+  begin
+    CloseHandle(LHWriteOut);
+    CloseHandle(LHReadIn);
+    Result := True;
+  end
+  else
+  begin
+    CloseHandle(LHWriteOut);
+    CloseHandle(AHReadOut);
+    CloseHandle(LHReadIn);
+    CloseHandle(AHWriteIn);
+  end;
+end;
+
+procedure QueueCompletion(const AIsStream: Boolean; const AStreamCallback: TStreamChunkCallback;
+  const ACallback: TCompletionCallback; const AResponseText: string; const AUsage: TTokenUsage);
+begin
+  if GIsShuttingDown then Exit;
+  TThread.Queue(nil,
+    TThreadProcedure(
+      procedure
+      begin
+        if AIsStream then
+        begin
+          if Assigned(AStreamCallback) then
+          begin
+            AStreamCallback(AResponseText, False, '');
+            AStreamCallback('', True, '');
+          end;
+        end
+        else
+        begin
+          if Assigned(ACallback) then
+            ACallback(AResponseText, '', True, AUsage);
+        end;
+      end
+    )
+  );
+end;
+
+procedure QueueError(const AIsStream: Boolean; const AStreamCallback: TStreamChunkCallback;
+  const ACallback: TCompletionCallback; const AErrorMsg: string);
+begin
+  if GIsShuttingDown then Exit;
+  TThread.Queue(nil,
+    TThreadProcedure(
+      procedure
+      begin
+        if AIsStream then
+        begin
+          if Assigned(AStreamCallback) then
+            AStreamCallback('', True, AErrorMsg);
+        end
+        else
+        begin
+          if Assigned(ACallback) then
+            ACallback('', AErrorMsg, False, TTokenUsage.Empty);
+        end;
+      end
+    )
+  );
+end;
+
+procedure TRadIAOpenAIProvider.ReadCodexOutputPipe(AReadHandle: THandle; const AIsStream: Boolean;
+  const AStreamCallback: TStreamChunkCallback; var AResponseText: string;
+  var AInputTokens, AOutputTokens: Integer);
+var
+  LBuffer: array[0..4095] of Byte;
+  LBytesRead: DWORD;
+  LLineBytes: TList<Byte>;
+  LJsonStr: string;
+  I: Integer;
+
+  procedure ProcessBufferByte(AByte: Byte);
+  var
+    LJsonStrLocal: string;
+  begin
+    if AByte = 10 then
+    begin
+      if LLineBytes.Count > 0 then
+      begin
+        LJsonStrLocal := TEncoding.UTF8.GetString(LLineBytes.ToArray).Trim;
+        LLineBytes.Clear;
+      end
+      else
+        LJsonStrLocal := '';
+
+      ProcessSingleCodexLine(LJsonStrLocal, Self, AIsStream, AStreamCallback,
+        AResponseText, AInputTokens, AOutputTokens);
+    end
+    else if AByte <> 13 then
+    begin
+      LLineBytes.Add(AByte);
+    end;
+  end;
+
+begin
+  LLineBytes := TList<Byte>.Create;
+  try
+    while ReadFile(AReadHandle, LBuffer[0], SizeOf(LBuffer), LBytesRead, nil) and (LBytesRead > 0) do
+    begin
+      for I := 0 to LBytesRead - 1 do
+      begin
+        ProcessBufferByte(LBuffer[I]);
+      end;
+    end;
+
+    if LLineBytes.Count > 0 then
+    begin
+      LJsonStr := TEncoding.UTF8.GetString(LLineBytes.ToArray).Trim;
+      ProcessSingleCodexLine(LJsonStr, Self, AIsStream, AStreamCallback,
+        AResponseText, AInputTokens, AOutputTokens);
+    end;
+  finally
+    LLineBytes.Free;
+  end;
+end;
+
+procedure TRadIAOpenAIProvider.RunCodexLoop(const ACmdLine: string; const APrompt: string;
+  const ACallback: TCompletionCallback; const AStreamCallback: TStreamChunkCallback;
+  const AIsStream: Boolean);
+var
+  LHReadOut, LHWriteIn: THandle;
+  LPi: TProcessInformation;
+  LResponseText: string;
+  LInputTokens, LOutputTokens: Integer;
+  LUsage: TTokenUsage;
+  LExitCode: DWORD;
+begin
+  if CreateCodexProcess(ACmdLine, LHReadOut, LHWriteIn, LPi) then
+  begin
+    WritePromptToPipe(LHWriteIn, APrompt);
+
+    LResponseText := '';
+    LInputTokens := 0;
+    LOutputTokens := 0;
+
+    ReadCodexOutputPipe(LHReadOut, AIsStream, AStreamCallback, LResponseText, LInputTokens, LOutputTokens);
+    CloseHandle(LHReadOut);
+
+    WaitForSingleObject(LPi.hProcess, INFINITE);
+    GetExitCodeProcess(LPi.hProcess, LExitCode);
+    CloseHandle(LPi.hProcess);
+    CloseHandle(LPi.hThread);
+
+    if LResponseText.IsEmpty then
+      LResponseText := 'Error: No response generated by Codex.';
+
+    LUsage.PromptTokens := LInputTokens;
+    LUsage.CompletionTokens := LOutputTokens;
+    LUsage.TotalTokens := LInputTokens + LOutputTokens;
+
+    QueueCompletion(AIsStream, AStreamCallback, ACallback, LResponseText, LUsage);
+  end
+  else
+  begin
+    QueueError(AIsStream, AStreamCallback, ACallback, 'Error: Failed to create the Codex process.');
+  end;
+end;
+
+procedure TRadIAOpenAIProvider.ProcessCodexJsonLine(const AJsonStr: string;
+  out ADeltaText: string; var AResponseText: string; var AInputTokens, AOutputTokens: Integer);
+var
+  LJson: TJSONObject;
+  LType: string;
+begin
+  ADeltaText := '';
+  try
+    LJson := TJSONObject.ParseJSONValue(AJsonStr) as TJSONObject;
+  except
+    on E: Exception do
+    begin
+      TLogger.Log('Error parsing Codex JSON: ' + E.Message, 'OpenAI');
+      Exit;
+    end;
+  end;
+
+  if not Assigned(LJson) then
+    Exit;
+
+  try
+    LType := LJson.GetValue<string>('type', '');
+    if LType.IsEmpty then
+      LType := LJson.GetValue<string>('object', '');
+
+    if SameText(LType, 'thread.started') then
+      ProcessThreadStarted(LJson, FThreadId)
+    else if SameText(LType, 'thread.message.delta') or SameText(LType, 'message.delta') then
+      ADeltaText := ProcessMessageDelta(LJson, Self)
+    else if SameText(LType, 'item.completed') then
+      ProcessItemCompleted(LJson, AResponseText)
+    else if SameText(LType, 'turn.completed') then
+      ProcessTurnCompleted(LJson, AInputTokens, AOutputTokens);
+
+    if ADeltaText.IsEmpty then
+      ADeltaText := LJson.GetValue<string>('text', '');
+  finally
+    LJson.Free;
+  end;
+end;
+
+function TRadIAOpenAIProvider.GetEffectiveSystemPrompt: string;
+var
+  LSystemPrompt: string;
+  LAdapter: IRadIAIDEAdapter;
+  LDelphiVersionName: string;
+  LPreferredLanguage: string;
+  LDelphiVersionPrompt: string;
+begin
+  LSystemPrompt := FConfig.SystemPrompt;
+
+  LDelphiVersionName := 'Delphi';
+  LPreferredLanguage := '';
+
+  if TRadIAContainer.TryResolve<IRadIAIDEAdapter>(LAdapter) then
+  begin
+    LDelphiVersionName := LAdapter.GetDelphiVersionName;
+    LPreferredLanguage := LAdapter.GetPreferredLanguageInstruction;
+  end;
+
+  if FConfig.InjectDelphiVersion then
+  begin
+    LDelphiVersionPrompt := 'The user is writing code using Embarcadero ' + LDelphiVersionName + '. ' +
+                            'Make sure any code, syntax, keywords, and RTL components you generate are ' +
+                            'fully compatible and compile in this version. Avoid newer language features ' +
+                            'that are not supported in ' + LDelphiVersionName + '. ';
+    if not LPreferredLanguage.IsEmpty then
+      LDelphiVersionPrompt := LDelphiVersionPrompt + LPreferredLanguage;
+
+    if LSystemPrompt.IsEmpty then
+      LSystemPrompt := LDelphiVersionPrompt
+    else
+      LSystemPrompt := LSystemPrompt + sLineBreak + sLineBreak + LDelphiVersionPrompt;
+  end;
+
+  Result := LSystemPrompt;
 end;
 
 procedure TRadIAOpenAIProvider.ExecuteCodexCli(const APrompt: string;
@@ -184,6 +572,8 @@ var
   LCodexPath: string;
   LCmdLine: string;
   LThread: TThread;
+  LSystemPrompt: string;
+  LPromptToSend: string;
 begin
   LActiveModel := GetActiveModel;
 
@@ -234,238 +624,18 @@ begin
       [LCodexPath, LActiveModel, FThreadId]);
   end;
 
+  LPromptToSend := APrompt;
+  if FThreadId.IsEmpty then
+  begin
+    LSystemPrompt := GetEffectiveSystemPrompt;
+    if not LSystemPrompt.IsEmpty then
+      LPromptToSend := LSystemPrompt + sLineBreak + sLineBreak + APrompt;
+  end;
+
   LThread := TThread.CreateAnonymousThread(
     procedure
-    var
-      LSa: TSecurityAttributes;
-      LSi: TStartupInfo;
-      LPi: TProcessInformation;
-      LHReadOut, LHWriteOut: THandle;
-      LHReadIn, LHWriteIn: THandle;
-      LBuffer: array[0..4095] of Byte;
-      LBytesRead, LBytesWritten: DWORD;
-      LOutputStr: string;
-      LLineBytes: TList<Byte>;
-      I: Integer;
-      LJsonStr: string;
-      LJson: TJSONObject;
-      LType: string;
-      LItemObj: TJSONObject;
-      LResponseText: string;
-      LUsageObj: TJSONObject;
-      LInputTokens, LOutputTokens: Integer;
-      LUsage: TTokenUsage;
-      LExitCode: DWORD;
-      LUtf8Prompt: RawByteString;
     begin
-      LSa.nLength := SizeOf(TSecurityAttributes);
-      LSa.bInheritHandle := True;
-      LSa.lpSecurityDescriptor := nil;
-
-      if not CreatePipe(LHReadOut, LHWriteOut, @LSa, 0) then Exit;
-      if not CreatePipe(LHReadIn, LHWriteIn, @LSa, 0) then
-      begin
-        CloseHandle(LHReadOut);
-        CloseHandle(LHWriteOut);
-        Exit;
-      end;
-
-      SetHandleInformation(LHReadOut, HANDLE_FLAG_INHERIT, 0);
-      SetHandleInformation(LHWriteIn, HANDLE_FLAG_INHERIT, 0);
-
-      ZeroMemory(@LSi, SizeOf(TStartupInfo));
-      LSi.cb := SizeOf(TStartupInfo);
-      LSi.dwFlags := STARTF_USESTDHANDLES or STARTF_USESHOWWINDOW;
-      LSi.wShowWindow := SW_HIDE;
-      LSi.hStdOutput := LHWriteOut;
-      LSi.hStdError := LHWriteOut;
-      LSi.hStdInput := LHReadIn;
-
-      UniqueString(LCmdLine);
-
-      if CreateProcess(nil, PChar(LCmdLine), nil, nil, True,
-        CREATE_NO_WINDOW, nil, nil, LSi, LPi) then
-      begin
-        CloseHandle(LHWriteOut);
-        CloseHandle(LHReadIn);
-
-        LUtf8Prompt := UTF8Encode(APrompt);
-        if Length(LUtf8Prompt) > 0 then
-        begin
-          WriteFile(LHWriteIn, LUtf8Prompt[1], Length(LUtf8Prompt), LBytesWritten, nil);
-        end;
-        CloseHandle(LHWriteIn);
-
-        LOutputStr := '';
-        LResponseText := '';
-        LInputTokens := 0;
-        LOutputTokens := 0;
-
-        LLineBytes := TList<Byte>.Create;
-        try
-          while ReadFile(LHReadOut, LBuffer[0], SizeOf(LBuffer), LBytesRead, nil) and (LBytesRead > 0) do
-          begin
-            for I := 0 to LBytesRead - 1 do
-            begin
-              if LBuffer[I] = 10 then
-              begin
-                if LLineBytes.Count > 0 then
-                begin
-                  LJsonStr := TEncoding.UTF8.GetString(LLineBytes.ToArray).Trim;
-                  LLineBytes.Clear;
-                end
-                else
-                  LJsonStr := '';
-
-                if not LJsonStr.IsEmpty then
-                begin
-                  try
-                    LJson := TJSONObject.ParseJSONValue(LJsonStr) as TJSONObject;
-                    if Assigned(LJson) then
-                    begin
-                      try
-                        LType := LJson.GetValue<string>('type', '');
-
-                        if SameText(LType, 'thread.started') then
-                        begin
-                          FThreadId := LJson.GetValue<string>('thread_id', '');
-                        end
-                        else if SameText(LType, 'item.completed') then
-                        begin
-                          LItemObj := LJson.GetValue('item') as TJSONObject;
-                          if Assigned(LItemObj) then
-                          begin
-                            LResponseText := LItemObj.GetValue<string>('text', '');
-                          end;
-                        end
-                        else if SameText(LType, 'turn.completed') then
-                        begin
-                          LUsageObj := LJson.GetValue('usage') as TJSONObject;
-                          if Assigned(LUsageObj) then
-                          begin
-                            LInputTokens := LUsageObj.GetValue<Integer>('input_tokens', 0);
-                            LOutputTokens := LUsageObj.GetValue<Integer>('output_tokens', 0);
-                          end;
-                        end;
-                      finally
-                        LJson.Free;
-                      end;
-                    end;
-                  except
-                  end;
-                end;
-              end
-              else if LBuffer[I] <> 13 then
-              begin
-                LLineBytes.Add(LBuffer[I]);
-              end;
-            end;
-          end;
-
-          if LLineBytes.Count > 0 then
-          begin
-            LJsonStr := TEncoding.UTF8.GetString(LLineBytes.ToArray).Trim;
-            if not LJsonStr.IsEmpty then
-            begin
-              try
-                LJson := TJSONObject.ParseJSONValue(LJsonStr) as TJSONObject;
-                if Assigned(LJson) then
-                begin
-                  try
-                    LType := LJson.GetValue<string>('type', '');
-
-                    if SameText(LType, 'thread.started') then
-                    begin
-                      FThreadId := LJson.GetValue<string>('thread_id', '');
-                    end
-                    else if SameText(LType, 'item.completed') then
-                    begin
-                      LItemObj := LJson.GetValue('item') as TJSONObject;
-                      if Assigned(LItemObj) then
-                      begin
-                        LResponseText := LItemObj.GetValue<string>('text', '');
-                      end;
-                    end
-                    else if SameText(LType, 'turn.completed') then
-                    begin
-                      LUsageObj := LJson.GetValue('usage') as TJSONObject;
-                      if Assigned(LUsageObj) then
-                      begin
-                        LInputTokens := LUsageObj.GetValue<Integer>('input_tokens', 0);
-                        LOutputTokens := LUsageObj.GetValue<Integer>('output_tokens', 0);
-                      end;
-                    end;
-                  finally
-                    LJson.Free;
-                  end;
-                end;
-              except
-              end;
-            end;
-          end;
-        finally
-          LLineBytes.Free;
-        end;
-
-        CloseHandle(LHReadOut);
-
-        WaitForSingleObject(LPi.hProcess, INFINITE);
-        GetExitCodeProcess(LPi.hProcess, LExitCode);
-        CloseHandle(LPi.hProcess);
-        CloseHandle(LPi.hThread);
-
-        if LResponseText.IsEmpty then
-        begin
-          LResponseText := 'Error: No response generated by Codex.';
-        end;
-
-        LUsage.PromptTokens := LInputTokens;
-        LUsage.CompletionTokens := LOutputTokens;
-        LUsage.TotalTokens := LInputTokens + LOutputTokens;
-
-        if not GIsShuttingDown then
-        begin
-          TThread.Queue(nil,
-            TThreadProcedure(
-              procedure
-              begin
-                if AIsStream then
-                begin
-                  AStreamCallback(LResponseText, False, '');
-                  AStreamCallback('', True, '');
-                end
-                else
-                begin
-                  ACallback(LResponseText, '', True, LUsage);
-                end;
-              end
-            )
-          );
-        end;
-      end
-      else
-      begin
-        CloseHandle(LHWriteOut);
-        CloseHandle(LHReadOut);
-        CloseHandle(LHReadIn);
-        CloseHandle(LHWriteIn);
-
-        if not GIsShuttingDown then
-        begin
-          TThread.Queue(nil,
-            TThreadProcedure(
-              procedure
-              begin
-                if AIsStream then
-                  AStreamCallback('', True, 'Error: Failed to create the Codex process.')
-                else
-                  ACallback('', 'Error: Failed to create the Codex process.', False,
-                    TTokenUsage.Empty);
-              end
-            )
-          );
-        end;
-      end;
+      RunCodexLoop(LCmdLine, LPromptToSend, ACallback, AStreamCallback, AIsStream);
     end
   );
 

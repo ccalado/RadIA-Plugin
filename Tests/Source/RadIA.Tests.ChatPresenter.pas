@@ -1,4 +1,4 @@
-﻿unit RadIA.Tests.ChatPresenter;
+unit RadIA.Tests.ChatPresenter;
 
 interface
 
@@ -56,7 +56,8 @@ type
     procedure SetPromptInput(const APrompt: string);
     procedure FocusPromptInput;
     function GetActiveEditorText(out ACode: string; const AOnlySelected: Boolean): Boolean;
-    procedure ReplaceActiveEditorText(const ACode: string);
+    procedure ReplaceActiveEditorText(const ACode: string; const AReplaceWholeBuffer: Boolean = False;
+      const AOriginalText: string = '');
     procedure ShowMessageDialog(const AMessage: string);
     function SaveDialogExecute(out AFileName: string): Boolean;
     procedure ToggleSessionsPanel;
@@ -164,12 +165,18 @@ type
     procedure TestSendPromptDummy;
     [Test]
     procedure TestRenameSessionDummy;
+    [Test]
+    procedure TestWebViewMessageQueueing;
+    [Test]
+    procedure TestProcessStreamChunkNormalFlow;
+    [Test]
+    procedure TestProcessStreamChunkAutoReplace;
   end;
 
 implementation
 
 uses
-  RadIA.Core.Config, RadIA.Core.SettingsStorage, System.IOUtils;
+  RadIA.Core.Config, RadIA.Core.SettingsStorage, System.IOUtils, RadIA.Core.Mediator;
 
 { TMockChatView }
 
@@ -276,7 +283,8 @@ begin
   Result := not ACode.IsEmpty;
 end;
 
-procedure TMockChatView.ReplaceActiveEditorText(const ACode: string);
+procedure TMockChatView.ReplaceActiveEditorText(const ACode: string; const AReplaceWholeBuffer: Boolean;
+  const AOriginalText: string);
 begin
   EditorTextReplaced := True;
   ReplacedEditorTextValue := ACode;
@@ -659,6 +667,84 @@ begin
   except
   end;
   Assert.IsTrue(True);
+end;
+
+procedure TTestChatPresenter.TestWebViewMessageQueueing;
+begin
+  FPresenter.Initialize('C:\mock\web');
+  FPresenter.WebViewReady := False;
+
+  FPresenter.ClearChat;
+
+  Assert.AreEqual(0, FMockView.PostedMessages.Count);
+
+  FPresenter.OnWebViewReady;
+
+  Assert.AreEqual(3, FMockView.PostedMessages.Count);
+  Assert.Contains(FMockView.PostedMessages[1], 'clear_chat');
+  Assert.Contains(FMockView.PostedMessages[2], 'update_tokens');
+end;
+
+procedure TTestChatPresenter.TestProcessStreamChunkNormalFlow;
+var
+  LCtx: TStreamChunkCtx;
+  LDoneHandled: Boolean;
+  LFullResponse: string;
+begin
+  FPresenter.Initialize('C:\mock\web');
+  FPresenter.WebViewReady := True;
+
+  LCtx.Chunk := 'Hello world';
+  LCtx.IsDone := False;
+  LCtx.Error := '';
+  LCtx.SessionId := FPresenter.SessionManager.ActiveSessionId;
+  LCtx.ActiveProvider := 'Gemini';
+  LCtx.ActiveModel := 'gemini-1.5-flash';
+
+  LDoneHandled := False;
+  LFullResponse := '';
+
+  FPresenter.ProcessStreamChunk(LCtx, LDoneHandled, LFullResponse);
+
+  Assert.IsFalse(LDoneHandled);
+  Assert.AreEqual('Hello world', LFullResponse);
+end;
+
+procedure TTestChatPresenter.TestProcessStreamChunkAutoReplace;
+var
+  LCtx: TStreamChunkCtx;
+  LDoneHandled: Boolean;
+  LFullResponse: string;
+  LMediator: TRadIAMediator;
+begin
+  FPresenter.Initialize('C:\mock\web');
+  FPresenter.WebViewReady := True;
+
+  LMediator := TRadIAMediator.Instance;
+  LMediator.AutoReplaceTarget := 'procedure OldProc;';
+  try
+    FMockView.EditorTextReplaced := False;
+    FMockView.ReplacedEditorTextValue := '';
+
+    LCtx.Chunk := '```pascal' + #10 + 'procedure NewProc;' + #10 + 'begin' + #10 + 'end;' + #10 + '```';
+    LCtx.IsDone := True;
+    LCtx.Error := '';
+    LCtx.SessionId := FPresenter.SessionManager.ActiveSessionId;
+    LCtx.ActiveProvider := 'Gemini';
+    LCtx.ActiveModel := 'gemini-1.5-flash';
+
+    LDoneHandled := False;
+    LFullResponse := '';
+
+    FPresenter.ProcessStreamChunk(LCtx, LDoneHandled, LFullResponse);
+
+    Assert.IsTrue(LDoneHandled);
+    Assert.IsTrue(FMockView.EditorTextReplaced);
+    Assert.Contains(FMockView.ReplacedEditorTextValue, 'NewProc');
+    Assert.AreEqual('', LMediator.AutoReplaceTarget);
+  finally
+    LMediator.AutoReplaceTarget := '';
+  end;
 end;
 
 initialization

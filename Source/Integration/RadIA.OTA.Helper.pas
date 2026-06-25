@@ -30,6 +30,7 @@ type
     class function OpenProjectInIDE(const AProjectPath: string): Boolean;
     class function GetDelphiVersionName: string;
     class function GetPreferredLanguageInstruction: string;
+    class function CleanCodeResponse(const AResponse: string; const AIndent: string = ''): string;
   end;
 
 implementation
@@ -353,6 +354,128 @@ begin
     $10: Result := 'Please reply in Italian.';
     else
       Result := 'Please reply in English.';
+  end;
+end;
+
+function HasCodeFence(const ALines: TStrings): Boolean;
+var
+  K: Integer;
+begin
+  Result := False;
+  for K := 0 to ALines.Count - 1 do
+  begin
+    if ALines[K].Trim.StartsWith('```') then
+      Exit(True);
+  end;
+end;
+
+procedure ExtractFenceContent(const ALines, AOutput: TStrings; const AHasFence: Boolean);
+var
+  K: Integer;
+  LLine, LTrimmed: string;
+  LInFence, LFoundFence: Boolean;
+begin
+  LInFence := False;
+  LFoundFence := False;
+  for K := 0 to ALines.Count - 1 do
+  begin
+    LLine := ALines[K];
+    LTrimmed := LLine.Trim;
+    if LTrimmed.StartsWith('```') then
+    begin
+      if not LInFence then
+      begin
+        LInFence := True;
+        LFoundFence := True;
+        Continue;
+      end;
+      Break;
+    end;
+
+    if (AHasFence and LInFence) or ((not AHasFence) and (not LFoundFence)) then
+      AOutput.Add(LLine);
+  end;
+end;
+
+function CountLeadingWhitespace(const ALine: string): Integer;
+var
+  LIndex: Integer;
+begin
+  Result := 0;
+  for LIndex := Low(ALine) to High(ALine) do
+  begin
+    if not CharInSet(ALine[LIndex], [' ', #9]) then
+      Exit;
+    Inc(Result);
+  end;
+end;
+
+function RemoveLeadingWhitespace(const ALine: string; const ACount: Integer): string;
+var
+  LIndex: Integer;
+  LRemoved: Integer;
+begin
+  LIndex := Low(ALine);
+  LRemoved := 0;
+  while (LIndex <= High(ALine)) and (LRemoved < ACount) and CharInSet(ALine[LIndex], [' ', #9]) do
+  begin
+    Inc(LIndex);
+    Inc(LRemoved);
+  end;
+
+  Result := Copy(ALine, LIndex, MaxInt);
+end;
+
+class function TRadIAOTAHelper.CleanCodeResponse(const AResponse: string; const AIndent: string): string;
+var
+  LLines: TStringList;
+  LOutput: TStringList;
+  I: Integer;
+  LHasFence: Boolean;
+  LMinIndent: Integer;
+  LIndentCount: Integer;
+begin
+  Result := '';
+  LLines := TStringList.Create;
+  LOutput := TStringList.Create;
+  try
+    LLines.Text := AResponse;
+
+    LHasFence := HasCodeFence(LLines);
+    ExtractFenceContent(LLines, LOutput, LHasFence);
+
+    while (LOutput.Count > 0) and LOutput[0].Trim.IsEmpty do
+      LOutput.Delete(0);
+
+    while (LOutput.Count > 0) and LOutput[LOutput.Count - 1].Trim.IsEmpty do
+      LOutput.Delete(LOutput.Count - 1);
+
+    LMinIndent := MaxInt;
+    for I := 0 to LOutput.Count - 1 do
+    begin
+      if LOutput[I].Trim.IsEmpty then
+        Continue;
+
+      LIndentCount := CountLeadingWhitespace(LOutput[I]);
+      if LIndentCount < LMinIndent then
+        LMinIndent := LIndentCount;
+    end;
+
+    if LMinIndent = MaxInt then
+      Exit('');
+
+    for I := 0 to LOutput.Count - 1 do
+    begin
+      if LOutput[I].Trim.IsEmpty then
+        LOutput[I] := ''
+      else
+        LOutput[I] := AIndent + RemoveLeadingWhitespace(LOutput[I], LMinIndent);
+    end;
+
+    Result := LOutput.Text.TrimRight;
+  finally
+    LOutput.Free;
+    LLines.Free;
   end;
 end;
 
