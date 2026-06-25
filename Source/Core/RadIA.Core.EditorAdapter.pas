@@ -129,14 +129,14 @@ end;
 
 function TRadIAOTAEditorAdapter.GetSelectedText: string;
 var
-  LEditBuffer: IOTAEditBuffer;
+  LView: IOTAEditView;
   LEditBlock: IOTAEditBlock;
 begin
   Result := '';
-  LEditBuffer := IOTAEditBuffer(GetCurrentEditBuffer);
-  if Assigned(LEditBuffer) then
+  LView := IOTAEditView(GetCurrentEditView);
+  if Assigned(LView) then
   begin
-    LEditBlock := LEditBuffer.EditBlock;
+    LEditBlock := LView.Block;
     if Assigned(LEditBlock) and (LEditBlock.Size > 0) and
        ((LEditBlock.StartingColumn <> LEditBlock.EndingColumn) or
         (LEditBlock.StartingRow <> LEditBlock.EndingRow)) then
@@ -165,6 +165,8 @@ begin
     InsertText(AText);
     if Assigned(LEditBlock) then
       LEditBlock.Reset;
+    if Assigned(LView.Position) then
+      LView.Position.Move(LView.Position.Row, LView.Position.Column);
   end;
 end;
 
@@ -190,6 +192,8 @@ begin
       LEditWriter.Insert(PAnsiChar(LUtf8Text));
       if Assigned(LEditBuffer.EditBlock) then
         LEditBuffer.EditBlock.Reset;
+      if Assigned(LView.Position) then
+        LView.Position.Move(LView.Position.Row, LView.Position.Column);
       RefreshView;
     end;
   end;
