@@ -163,6 +163,8 @@ begin
       LEditBlock.Delete;
     end;
     InsertText(AText);
+    if Assigned(LEditBlock) then
+      LEditBlock.Reset;
   end;
 end;
 
@@ -186,6 +188,8 @@ begin
 
       LUtf8Text := UTF8Encode(AText);
       LEditWriter.Insert(PAnsiChar(LUtf8Text));
+      if Assigned(LEditBuffer.EditBlock) then
+        LEditBuffer.EditBlock.Reset;
       RefreshView;
     end;
   end;
